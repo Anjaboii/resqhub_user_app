@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'screens/shell.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+import 'auth/auth_gate.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const ResQHubUserApp());
 }
 
@@ -23,7 +26,7 @@ class ResQHubUserApp extends StatelessWidget {
           secondary: Color(0xFFFF7A1A),
         ),
       ),
-      home: const AppShell(),
+      home: const AuthGate(), // ✅ changed from AppShell()
     );
   }
 }

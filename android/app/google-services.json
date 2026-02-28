@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "367144501609",
+    "project_id": "resqhub-e7005",
+    "storage_bucket": "resqhub-e7005.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:367144501609:android:d338de720dc3f3d6447df8",
+        "android_client_info": {
+          "package_name": "com.example.resqhub_user_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVDuAk5EAULQ7AWssvXqwCImFUgIqlZ50"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
