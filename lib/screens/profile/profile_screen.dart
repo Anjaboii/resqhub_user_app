@@ -34,10 +34,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     String memberSinceText(DateTime? dt) {
       if (dt == null) return "Member since —";
-      // simple format: Month YYYY
       const months = [
-        "January","February","March","April","May","June",
-        "July","August","September","October","November","December"
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
       ];
       return "Member since ${months[dt.month - 1]} ${dt.year}";
     }
@@ -45,7 +44,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userDocRef = FirebaseFirestore.instance.collection("users").doc(uid);
     final vehiclesColRef = userDocRef.collection("vehicles");
 
-    // services count = requests by this user
     final servicesQuery = FirebaseFirestore.instance
         .collection("requests")
         .where("userId", isEqualTo: uid);
@@ -57,7 +55,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           builder: (context, userSnap) {
             final userData = (userSnap.data?.data() as Map<String, dynamic>?) ?? {};
             final phone = (userData["phone"] ?? "—").toString();
-            final emergency = (userData["emergencyContact"] ?? "—").toString();
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -69,7 +66,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     backgroundColor: AppTheme.accent,
                     child: Text(
                       displayName.isNotEmpty ? displayName[0].toUpperCase() : "U",
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.black),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                 ),
@@ -90,7 +91,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 14),
 
-                // Stats cards (Services / Vehicles / Avg Rating placeholder)
                 GlassCard(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -116,7 +116,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 14),
 
-                // Contact card
                 GlassCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +136,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               context,
                               userDocRef: userDocRef,
                               currentPhone: phone == "—" ? "" : phone,
-                              currentEmergency: emergency == "—" ? "" : emergency,
                             ),
                             icon: const Icon(Icons.edit_rounded, size: 18, color: AppTheme.accent),
                             label: const Text("Edit", style: TextStyle(color: AppTheme.accent)),
@@ -148,15 +146,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _InfoRow(icon: Icons.phone_rounded, label: "Phone", value: phone),
                       const SizedBox(height: 10),
                       _InfoRow(icon: Icons.email_rounded, label: "Email", value: email),
-                      const SizedBox(height: 10),
-                      _InfoRow(icon: Icons.warning_rounded, label: "Emergency Contact", value: emergency),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 14),
 
-                // Settings
                 GlassCard(
                   child: Column(
                     children: [
@@ -225,10 +220,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       BuildContext context, {
         required DocumentReference userDocRef,
         required String currentPhone,
-        required String currentEmergency,
       }) async {
     final phoneCtrl = TextEditingController(text: currentPhone);
-    final emergencyCtrl = TextEditingController(text: currentEmergency);
 
     await showModalBottomSheet(
       context: context,
@@ -258,15 +251,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: emergencyCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: "Emergency Contact",
-                  border: OutlineInputBorder(),
-                ),
-              ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -279,7 +263,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () async {
                     await userDocRef.set({
                       "phone": phoneCtrl.text.trim(),
-                      "emergencyContact": emergencyCtrl.text.trim(),
                       "updatedAt": FieldValue.serverTimestamp(),
                     }, SetOptions(merge: true));
 

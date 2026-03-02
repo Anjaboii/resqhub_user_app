@@ -29,16 +29,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     final uid = user.uid;
 
-    Query baseQuery = FirebaseFirestore.instance
+    // Query for LIST (filtered)
+    Query<Map<String, dynamic>> listQuery = FirebaseFirestore.instance
         .collection('requests')
         .where('userId', isEqualTo: uid);
 
     if (filter != "All") {
-      // our status values are strings like "requested", "completed", "cancelled"
-      baseQuery = baseQuery.where('status', isEqualTo: filter.toLowerCase());
+      listQuery = listQuery.where('status', isEqualTo: filter.toLowerCase());
     }
 
-    final query = baseQuery.orderBy('createdAt', descending: true);
+    listQuery = listQuery.orderBy('createdAt', descending: true);
+
+    // Query for STATS (always ALL requests)
+    final statsQuery = FirebaseFirestore.instance
+        .collection('requests')
+        .where('userId', isEqualTo: uid);
 
     return SafeArea(
       child: Scaffold(
@@ -47,7 +52,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
           actions: [
             IconButton(
               onPressed: () {
-                // Optional: later open a real filter sheet
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Use chips to filter for now 🙂")),
                 );
@@ -56,89 +60,141 @@ class _HistoryScreenState extends State<HistoryScreen> {
             )
           ],
         ),
-        body: StreamBuilder<QuerySnapshot>(
-          stream: query.snapshots(),
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        body: Column(
+          children: [
+            // ===== Stats (All requests) =====
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: statsQuery.snapshots(),
+                builder: (context, snap) {
+                  final allDocs = snap.data?.docs ?? [];
 
-            final docs = snap.data?.docs ?? [];
+                  final completedCount = allDocs.where((d) => (d.data()['status'] ?? '') == 'completed').length;
 
-            // Stats (simple ones for now)
-            final completedCount = docs.where((d) {
-              final data = d.data() as Map<String, dynamic>;
-              return (data['status'] ?? '') == 'completed';
-            }).length;
+                  // later you can calculate totalSpent / avgRating when you store them in requests
+                  const totalSpent = "—";
+                  const avgRating = "—";
 
-            // Total spent + rating not in DB yet, show placeholders
-            final totalSpent = "—";
-            final avgRating = "—";
-
-            return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                GlassCard(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _Stat(title: completedCount.toString(), sub: "Completed"),
-                      _Stat(title: totalSpent, sub: "Total Spent"),
-                      _Stat(title: avgRating, sub: "Avg Rating"),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    _Chip(
-                      "All",
-                      selected: filter == "All",
-                      onTap: () => setState(() => filter = "All"),
+                  return GlassCard(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: const [
+                        // We'll fill completedCount via widget below to avoid const issue
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    _Chip(
-                      "Requested",
-                      selected: filter == "Requested",
-                      onTap: () => setState(() => filter = "Requested"),
-                    ),
-                    const SizedBox(width: 8),
-                    _Chip(
-                      "Completed",
-                      selected: filter == "Completed",
-                      onTap: () => setState(() => filter = "Completed"),
-                    ),
-                    const SizedBox(width: 8),
-                    _Chip(
-                      "Cancelled",
-                      selected: filter == "Cancelled",
-                      onTap: () => setState(() => filter = "Cancelled"),
-                    ),
-                  ],
-                ),
+                  );
+                },
+              ),
+            ),
 
-                const SizedBox(height: 12),
+            // We render stats again (non-const) so we can show completedCount.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: statsQuery.snapshots(),
+                builder: (context, snap) {
+                  final allDocs = snap.data?.docs ?? [];
+                  final completedCount = allDocs.where((d) => (d.data()['status'] ?? '') == 'completed').length;
 
-                if (docs.isEmpty)
-                  GlassCard(
-                    child: const Padding(
-                      padding: EdgeInsets.all(14),
-                      child: Text(
-                        "No requests yet.\nMake a request and it will appear here.",
-                        style: TextStyle(color: AppTheme.textDim),
-                        textAlign: TextAlign.center,
+                  const totalSpent = "—";
+                  const avgRating = "—";
+
+                  return GlassCard(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _Stat(title: completedCount.toString(), sub: "Completed"),
+                        const _Stat(title: totalSpent, sub: "Total Spent"),
+                        const _Stat(title: avgRating, sub: "Avg Rating"),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ===== Chips =====
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  _Chip("All", selected: filter == "All", onTap: () => setState(() => filter = "All")),
+                  const SizedBox(width: 8),
+                  _Chip("Requested", selected: filter == "Requested", onTap: () => setState(() => filter = "Requested")),
+                  const SizedBox(width: 8),
+                  _Chip("Completed", selected: filter == "Completed", onTap: () => setState(() => filter = "Completed")),
+                  const SizedBox(width: 8),
+                  _Chip("Cancelled", selected: filter == "Cancelled", onTap: () => setState(() => filter = "Cancelled")),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ===== List (Filtered) =====
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: listQuery.snapshots(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snap.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: GlassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text(
+                            "Error loading history.\n${snap.error}",
+                            style: const TextStyle(color: AppTheme.textDim),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                else
-                  for (final d in docs) ...[
-                    _HistoryCard.fromDoc(d),
-                    const SizedBox(height: 12),
-                  ],
-              ],
-            );
-          },
+                    );
+                  }
+
+                  final docs = snap.data?.docs ?? [];
+
+                  if (docs.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: GlassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text(
+                            filter == "All"
+                                ? "No requests yet.\nMake a request and it will appear here."
+                                : "No $filter requests yet.",
+                            style: const TextStyle(color: AppTheme.textDim),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: docs.length,
+                    itemBuilder: (context, i) {
+                      final d = docs[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _HistoryCard.fromDoc(d),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -214,8 +270,8 @@ class _HistoryCard extends StatelessWidget {
     required this.stars,
   });
 
-  factory _HistoryCard.fromDoc(QueryDocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  factory _HistoryCard.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
 
     final serviceType = (data['serviceType'] ?? 'unknown').toString();
     final status = (data['status'] ?? 'requested').toString();
@@ -227,8 +283,6 @@ class _HistoryCard extends StatelessWidget {
     final vPlate = (vehicleMap['plate'] ?? '').toString();
 
     String niceService(String s) {
-      // Convert enum-like names to nicer titles
-      // battery -> Battery, flatTire -> Flat Tire, outOfFuel -> Out Of Fuel
       if (s.isEmpty) return "Service";
       final withSpaces = s.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => "${m[1]} ${m[2]}");
       return withSpaces[0].toUpperCase() + withSpaces.substring(1);
@@ -236,14 +290,12 @@ class _HistoryCard extends StatelessWidget {
 
     String niceStatus(String s) {
       if (s.isEmpty) return "Requested";
-      final t = s[0].toUpperCase() + s.substring(1);
-      return t;
+      return s[0].toUpperCase() + s.substring(1);
     }
 
     String formatDate(dynamic ts) {
       if (ts is Timestamp) {
         final dt = ts.toDate();
-        // simple formatting without intl package
         final y = dt.year;
         final m = dt.month.toString().padLeft(2, '0');
         final d = dt.day.toString().padLeft(2, '0');
@@ -254,7 +306,6 @@ class _HistoryCard extends StatelessWidget {
       return "—";
     }
 
-    // Not stored yet in DB:
     final provider = (data['providerName'] ?? "—").toString();
     final price = (data['priceText'] ?? "—").toString();
     final stars = (data['rating'] is int) ? (data['rating'] as int) : 0;
