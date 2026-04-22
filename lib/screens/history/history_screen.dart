@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import '../tracking/live_tracking_screen.dart'; // ✅ Ensure this is imported
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -49,64 +50,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Service History", style: TextStyle(fontWeight: FontWeight.w900)),
-          actions: [
-            IconButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Use chips to filter for now 🙂")),
-                );
-              },
-              icon: const Icon(Icons.filter_alt_outlined, color: AppTheme.accent),
-            )
-          ],
         ),
         body: Column(
           children: [
-            // ===== Stats (All requests) =====
+            // ===== Stats Section =====
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: statsQuery.snapshots(),
-                builder: (context, snap) {
-                  final allDocs = snap.data?.docs ?? [];
-
-                  final completedCount = allDocs.where((d) => (d.data()['status'] ?? '') == 'completed').length;
-
-                  // later you can calculate totalSpent / avgRating when you store them in requests
-                  const totalSpent = "—";
-                  const avgRating = "—";
-
-                  return GlassCard(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: const [
-                        // We'll fill completedCount via widget below to avoid const issue
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // We render stats again (non-const) so we can show completedCount.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              padding: const EdgeInsets.all(16.0),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: statsQuery.snapshots(),
                 builder: (context, snap) {
                   final allDocs = snap.data?.docs ?? [];
                   final completedCount = allDocs.where((d) => (d.data()['status'] ?? '') == 'completed').length;
-
-                  const totalSpent = "—";
-                  const avgRating = "—";
 
                   return GlassCard(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _Stat(title: completedCount.toString(), sub: "Completed"),
-                        const _Stat(title: totalSpent, sub: "Total Spent"),
-                        const _Stat(title: avgRating, sub: "Avg Rating"),
+                        const _Stat(title: "—", sub: "Total Spent"),
+                        const _Stat(title: "—", sub: "Avg Rating"),
                       ],
                     ),
                   );
@@ -114,9 +76,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
 
-            const SizedBox(height: 12),
-
-            // ===== Chips =====
+            // ===== Filter Chips =====
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -135,7 +95,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
             const SizedBox(height: 12),
 
-            // ===== List (Filtered) =====
+            // ===== List of Requests =====
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: listQuery.snapshots(),
@@ -145,39 +105,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   }
 
                   if (snap.hasError) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: GlassCard(
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Text(
-                            "Error loading history.\n${snap.error}",
-                            style: const TextStyle(color: AppTheme.textDim),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    );
+                    return Center(child: Text("Error: ${snap.error}", style: const TextStyle(color: Colors.white)));
                   }
 
                   final docs = snap.data?.docs ?? [];
 
                   if (docs.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: GlassCard(
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Text(
-                            filter == "All"
-                                ? "No requests yet.\nMake a request and it will appear here."
-                                : "No $filter requests yet.",
-                            style: const TextStyle(color: AppTheme.textDim),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    );
+                    return const Center(child: Text("No history found.", style: TextStyle(color: AppTheme.textDim)));
                   }
 
                   return ListView.builder(
@@ -185,9 +119,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     itemCount: docs.length,
                     itemBuilder: (context, i) {
                       final d = docs[i];
+                      final data = d.data();
+
+                      // ✅ FIXED: Pass the requestId and other data to the Tracking screen on tap
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _HistoryCard.fromDoc(d),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => LiveTrackingScreen(
+                                  requestId: d.id, // 🔥 This fixes the Red Screen
+                                  serviceName: (data['serviceType'] ?? "Service").toString(),
+                                  vehicleName: (data['vehicle']?['name'] ?? "Vehicle").toString(),
+                                  location: (data['locationText'] ?? "Location").toString(),
+                                ),
+                              ),
+                            );
+                          },
+                          child: _HistoryCard.fromDoc(d),
+                        ),
                       );
                     },
                   );
@@ -272,7 +224,6 @@ class _HistoryCard extends StatelessWidget {
 
   factory _HistoryCard.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
-
     final serviceType = (data['serviceType'] ?? 'unknown').toString();
     final status = (data['status'] ?? 'requested').toString();
     final locationText = (data['locationText'] ?? '').toString();
@@ -288,60 +239,24 @@ class _HistoryCard extends StatelessWidget {
       return withSpaces[0].toUpperCase() + withSpaces.substring(1);
     }
 
-    String niceStatus(String s) {
-      if (s.isEmpty) return "Requested";
-      return s[0].toUpperCase() + s.substring(1);
-    }
-
     String formatDate(dynamic ts) {
       if (ts is Timestamp) {
         final dt = ts.toDate();
-        final y = dt.year;
-        final m = dt.month.toString().padLeft(2, '0');
-        final d = dt.day.toString().padLeft(2, '0');
-        final hh = dt.hour.toString().padLeft(2, '0');
-        final mm = dt.minute.toString().padLeft(2, '0');
-        return "$y-$m-$d • $hh:$mm";
+        return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} • ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
       }
       return "—";
     }
 
-    final provider = (data['providerName'] ?? "—").toString();
-    final price = (data['priceText'] ?? "—").toString();
-    final stars = (data['rating'] is int) ? (data['rating'] as int) : 0;
-
     return _HistoryCard(
       title: niceService(serviceType),
-      provider: provider,
-      badge: niceStatus(status),
-      price: price,
+      provider: (data['providerName'] ?? "—").toString(),
+      badge: status[0].toUpperCase() + status.substring(1),
+      price: (data['priceText'] ?? "—").toString(),
       vehicle: [vName, vPlate].where((e) => e.isNotEmpty).join(" • "),
       date: formatDate(createdAt),
       location: locationText,
-      stars: stars,
+      stars: (data['rating'] is int) ? (data['rating'] as int) : 0,
     );
-  }
-
-  Color _badgeBg() {
-    switch (badge.toLowerCase()) {
-      case 'completed':
-        return const Color(0xFF0D2A1A);
-      case 'cancelled':
-        return const Color(0xFF2A0D0D);
-      default:
-        return const Color(0xFF1B1F2A);
-    }
-  }
-
-  Color _badgeFg() {
-    switch (badge.toLowerCase()) {
-      case 'completed':
-        return const Color(0xFF3CE06D);
-      case 'cancelled':
-        return const Color(0xFFFF6B6B);
-      default:
-        return AppTheme.textDim;
-    }
   }
 
   @override
@@ -356,31 +271,22 @@ class _HistoryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _badgeBg(),
+                  color: badge.toLowerCase() == 'completed' ? const Color(0xFF0D2A1A) : const Color(0xFF1B1F2A),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(
-                  badge,
-                  style: TextStyle(color: _badgeFg(), fontWeight: FontWeight.w800, fontSize: 12),
-                ),
+                child: Text(badge, style: const TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Text(provider, style: const TextStyle(color: AppTheme.textDim)),
           const SizedBox(height: 12),
-          Text(vehicle.isEmpty ? "Vehicle —" : vehicle, style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
-          const SizedBox(height: 6),
+          Text(vehicle, style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
           Text(date, style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
-          const SizedBox(height: 6),
-          Text(location.isEmpty ? "Location —" : location, style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(
             children: [
-              for (int i = 0; i < 5; i++)
-                Icon(i < stars ? Icons.star_rounded : Icons.star_border_rounded, size: 18, color: AppTheme.accent),
-              const Spacer(),
-              Text(price, style: const TextStyle(color: AppTheme.accent, fontWeight: FontWeight.w900)),
+              const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textDim),
+              const SizedBox(width: 4),
+              Expanded(child: Text(location, style: const TextStyle(color: AppTheme.textDim, fontSize: 12), overflow: TextOverflow.ellipsis)),
             ],
           ),
         ],

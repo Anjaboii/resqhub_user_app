@@ -1,35 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/primary_button.dart';
 
-class LiveTrackingScreen extends StatefulWidget {
+class LiveTrackingScreen extends StatelessWidget {
+  final String requestId;
   final String serviceName;
   final String vehicleName;
   final String location;
 
   const LiveTrackingScreen({
     super.key,
+    required this.requestId,
     required this.serviceName,
     required this.vehicleName,
     required this.location,
   });
 
-  @override
-  State<LiveTrackingScreen> createState() => _LiveTrackingScreenState();
-}
-
-class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
-  bool accepted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // demo: auto switch to accepted after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      setState(() => accepted = true);
-    });
+  bool _isAtLeast(String current, String target) {
+    const order = ['requested', 'accepted', 'en route', 'arrived', 'completed'];
+    return order.indexOf(current) >= order.indexOf(target);
   }
 
   @override
@@ -40,116 +31,76 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w800)),
+            child: const Text("Cancel", style: TextStyle(color: Colors.redAccent)),
           )
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Live map tracking", style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 12),
-                Container(
-                  height: 160,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111A2E),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppTheme.stroke),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.location_on_rounded, color: AppTheme.accent, size: 40),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(
-                  value: accepted ? 0.7 : 0.25,
-                  backgroundColor: AppTheme.stroke,
-                  color: AppTheme.accent,
-                  minHeight: 6,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('requests').doc(requestId).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          if (accepted) ...[
-            GlassCard(
-              child: Row(
-                children: const [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Estimated Arrival", style: TextStyle(color: AppTheme.textDim)),
-                        SizedBox(height: 4),
-                        Text("5 min", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                      ],
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final String status = data['status'] ?? 'requested';
+          final String providerName = data['providerName'] ?? "Searching...";
+          final bool accepted = _isAtLeast(status, 'accepted');
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              GlassCard(
+                child: Column(
+                  children: [
+                    const Text("Map View", style: TextStyle(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 12),
+                    Container(
+                      height: 150,
+                      color: const Color(0xFF111A2E),
+                      child: const Center(child: Icon(Icons.location_on, color: AppTheme.accent, size: 40)),
                     ),
-                  ),
-                  CircleAvatar(
-                    backgroundColor: AppTheme.accent,
-                    child: Icon(Icons.navigation_rounded, color: Colors.black),
-                  )
-                ],
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(
+                      value: _isAtLeast(status, 'completed') ? 1.0 : (accepted ? 0.7 : 0.25),
+                      color: AppTheme.accent,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-
-            GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("AutoCare Garage", style: TextStyle(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 4),
-                  const Text("Saman Kumara • 4.8 ★ • 342 jobs", style: TextStyle(color: AppTheme.textDim)),
-                  const SizedBox(height: 10),
-                  Row(
+              const SizedBox(height: 12),
+              if (accepted)
+                GlassCard(
+                  child: Column(
                     children: [
-                      Expanded(child: PrimaryButton(text: "Call", onPressed: () {}, filled: false)),
-                      const SizedBox(width: 10),
-                      Expanded(child: PrimaryButton(text: "Message", onPressed: () {}, filled: false)),
+                      Text(providerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                      const Text("Professional Mechanic", style: TextStyle(color: AppTheme.textDim)),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: PrimaryButton(text: "Call", onPressed: () {}, filled: false)),
+                          const SizedBox(width: 8),
+                          Expanded(child: PrimaryButton(text: "Message", onPressed: () {}, filled: false)),
+                        ],
+                      )
                     ],
                   ),
-                ],
+                ),
+              const SizedBox(height: 12),
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("STATUS", style: TextStyle(fontWeight: FontWeight.bold)),
+                    _StatusItem(active: _isAtLeast(status, 'requested'), title: "Searching", sub: "Finding providers..."),
+                    _StatusItem(active: _isAtLeast(status, 'accepted'), title: "Accepted", sub: "Request accepted"),
+                    _StatusItem(active: _isAtLeast(status, 'en route'), title: "En Route", sub: "On the way"),
+                    _StatusItem(active: _isAtLeast(status, 'arrived'), title: "Arrived", sub: "At your location"),
+                    _StatusItem(active: _isAtLeast(status, 'completed'), title: "Completed", sub: "Job finished"),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("STATUS", style: TextStyle(color: AppTheme.textDim, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                const SizedBox(height: 10),
-                _StatusItem(active: true, title: "Searching", sub: "Finding nearby providers..."),
-                _StatusItem(active: accepted, title: "Accepted", sub: "Provider accepted your request"),
-                _StatusItem(active: false, title: "En Route", sub: "Provider is on the way"),
-                _StatusItem(active: false, title: "Arrived", sub: "Provider arrived at location"),
-                _StatusItem(active: false, title: "In Progress", sub: "Assistance in progress"),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("SERVICE DETAILS", style: TextStyle(color: AppTheme.textDim, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                const SizedBox(height: 10),
-                _KV("Service Type", widget.serviceName),
-                _KV("Vehicle", widget.vehicleName),
-                _KV("Location", widget.location),
-                _KV("Estimated Cost", "Rs. 2,500"),
-              ],
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -159,53 +110,16 @@ class _StatusItem extends StatelessWidget {
   final bool active;
   final String title;
   final String sub;
-
   const _StatusItem({required this.active, required this.title, required this.sub});
-
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 12,
-            backgroundColor: active ? AppTheme.accent : AppTheme.stroke,
-            child: active
-                ? const Icon(Icons.check_rounded, size: 16, color: Colors.black)
-                : const SizedBox.shrink(),
-          ),
+          Icon(active ? Icons.check_circle : Icons.radio_button_unchecked, color: active ? AppTheme.accent : Colors.grey),
           const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(sub, style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KV extends StatelessWidget {
-  final String k;
-  final String v;
-  const _KV(this.k, this.v);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(child: Text(k, style: const TextStyle(color: AppTheme.textDim))),
-          Flexible(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w900), textAlign: TextAlign.right)),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), Text(sub, style: const TextStyle(fontSize: 12))]),
         ],
       ),
     );

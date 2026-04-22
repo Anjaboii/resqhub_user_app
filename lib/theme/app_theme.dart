@@ -6,7 +6,8 @@ class AppTheme {
   static const card2 = Color(0xFF0B1020);
   static const stroke = Color(0xFF1B2338);
   static const textDim = Color(0xFF9BA8C7);
-  static const accent = Color(0xFFFF7A1A);
+  // static const accent = Color(0xFFFF7A1A);
+  static const accent = Color(0xFFB618EA);
 
   static ThemeData dark() {
     final base = ThemeData.dark(useMaterial3: true);
