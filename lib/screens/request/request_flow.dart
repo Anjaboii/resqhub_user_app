@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart'; // 👈 Make sure to run: flutter pub add geocoding
 
-import '../../models/demo_models.dart'; // ServiceType + serviceTitle/serviceSubtitle
+import '../../models/demo_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/primary_button.dart';
@@ -12,7 +14,7 @@ class RequestVehicle {
   final String name;
   final String plate;
   final String meta;
-  final String source; // "saved" | "temporary"
+  final String source;
 
   const RequestVehicle({
     required this.name,
@@ -38,9 +40,7 @@ class RequestFlowScreen extends StatefulWidget {
 
 class _RequestFlowScreenState extends State<RequestFlowScreen> {
   int step = 0;
-
   ServiceType? selectedService = ServiceType.battery;
-
   String? selectedVehicleId;
   bool useTemporaryVehicle = false;
   RequestVehicle? selectedVehicle;
@@ -48,9 +48,67 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
   final tempVehicleName = TextEditingController();
   final tempVehiclePlate = TextEditingController();
   final tempVehicleMeta = TextEditingController();
-
-  String location = "Galle Road, Colombo 03";
   final details = TextEditingController();
+
+  // 📍 Real-time Location Data
+  String location = "Fetching GPS location...";
+  double? latitude;
+  double? longitude;
+
+  @override
+  void initState() {
+    super.initState();
+    _determinePosition();
+  }
+
+  // 📡 UPDATED: Now fetches real address names
+  Future<void> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() => location = "GPS is disabled on device");
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() => location = "Location permission denied");
+        return;
+      }
+    }
+
+    try {
+      // 1. Get raw coordinates
+      Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high
+      );
+
+      // 2. Convert coordinates to human-readable address
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude
+      );
+
+      String readableAddress = "Unknown Location";
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        // Formatting the address (Street, City)
+        readableAddress = "${place.street}, ${place.locality}";
+      }
+
+      setState(() {
+        latitude = position.latitude;
+        longitude = position.longitude;
+        location = readableAddress; // 👈 Real name instead of "GPS Detected"
+      });
+    } catch (e) {
+      setState(() => location = "Error fetching address");
+    }
+  }
 
   @override
   void dispose() {
@@ -70,25 +128,19 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
   Future<String> _resolveUserName() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return "User";
-
     final dn = (u.displayName ?? "").trim();
     if (dn.isNotEmpty) return dn;
-
     try {
       final doc = await FirebaseFirestore.instance.collection("users").doc(u.uid).get();
       final fullName = (doc.data()?["fullName"] ?? "").toString().trim();
       if (fullName.isNotEmpty) return fullName;
     } catch (_) {}
-
-    final email = (u.email ?? "").trim();
-    if (email.contains("@")) return email.split("@").first;
     return "User";
   }
 
   void _emitTemporaryVehicle() {
     final name = tempVehicleName.text.trim();
     final plate = tempVehiclePlate.text.trim().toUpperCase();
-
     if (name.isEmpty || plate.isEmpty) {
       setState(() {
         selectedVehicle = null;
@@ -96,7 +148,6 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
       });
       return;
     }
-
     setState(() {
       selectedVehicle = RequestVehicle(
         name: name,
@@ -118,6 +169,8 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
       "serviceType": selectedService!.name,
       "vehicle": selectedVehicle!.toMap(),
       "locationText": location,
+      "lat": latitude,
+      "lng": longitude,
       "status": "requested",
       "createdAt": FieldValue.serverTimestamp(),
       "providerName": "",
@@ -129,7 +182,6 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
       data["details"] = trimmedDetails;
     }
 
-    // Capture the Document ID from Firestore
     final docRef = await FirebaseFirestore.instance.collection("requests").add(data);
 
     if (!mounted) return;
@@ -138,7 +190,7 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => LiveTrackingScreen(
-          requestId: docRef.id, // REAL ID passed here
+          requestId: docRef.id,
           serviceName: serviceTitle(selectedService!),
           vehicleName: "${selectedVehicle!.name} (${selectedVehicle!.plate})",
           location: location,
@@ -199,7 +251,7 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
                   tempMeta: tempVehicleMeta,
                   onTempChanged: _emitTemporaryVehicle,
                   location: location,
-                  onChangeLocation: () => setState(() => location = "Near Liberty Plaza"),
+                  onChangeLocation: _determinePosition,
                 ),
                 _ => _Step3(
                   service: selectedService!,
@@ -222,12 +274,10 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
                         );
                         return;
                       }
-
                       if (step < 2) {
                         setState(() => step++);
                         return;
                       }
-
                       try {
                         await _submitRequestAndGoTracking();
                       } catch (e) {
@@ -247,6 +297,8 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
     );
   }
 }
+
+// --- UI WIDGETS ---
 
 class _StepBar extends StatelessWidget {
   final int step;
@@ -410,7 +462,13 @@ class _Step2 extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 16),
-        const Text("Location", style: TextStyle(fontWeight: FontWeight.w800)),
+        Row(
+          children: [
+            const Text("Location", style: TextStyle(fontWeight: FontWeight.w800)),
+            const Spacer(),
+            IconButton(onPressed: onChangeLocation, icon: const Icon(Icons.my_location, color: AppTheme.accent, size: 20))
+          ],
+        ),
         GlassCard(child: Text(location, style: const TextStyle(fontWeight: FontWeight.w900))),
       ],
     );
