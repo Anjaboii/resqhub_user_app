@@ -60,23 +60,41 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
   @override
   void dispose() { details.dispose(); tempName.dispose(); tempPlate.dispose(); tempMeta.dispose(); super.dispose(); }
 
+  // 🛠️ UPDATED: Now fetches and includes userPhone
   Future<void> _submitRequest() async {
     final u = FirebaseAuth.instance.currentUser!;
+
+    // 🟢 Fetching user details (Name and Phone)
     final doc = await FirebaseFirestore.instance.collection("users").doc(u.uid).get();
     final uName = doc.data()?["fullName"] ?? u.displayName ?? "User";
+    final uPhone = doc.data()?["phone"] ?? ""; // 🎯 Fetching phone
 
     final data = {
-      "userId": u.uid, "userName": uName, "serviceType": selectedService!.name,
-      "vehicle": selectedVehicle!.toMap(), "locationText": location, "lat": latitude, "lng": longitude,
-      "status": "requested", "createdAt": FieldValue.serverTimestamp(), "providerName": "", "providerPhone": "",
+      "userId": u.uid,
+      "userName": uName,
+      "userPhone": uPhone, // 👈 Included for the Partner App Dialer
+      "serviceType": selectedService!.name,
+      "vehicle": selectedVehicle!.toMap(),
+      "locationText": location,
+      "lat": latitude,
+      "lng": longitude,
+      "status": "requested",
+      "createdAt": FieldValue.serverTimestamp(),
+      "providerName": "",
+      "providerPhone": "",
     };
+
     if (details.text.trim().isNotEmpty) data["details"] = details.text.trim();
 
+    // 🟢 Adding to requests collection
     final docRef = await FirebaseFirestore.instance.collection("requests").add(data);
+
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LiveTrackingScreen(
-      requestId: docRef.id, serviceName: serviceTitle(selectedService!),
-      vehicleName: "${selectedVehicle!.name} (${selectedVehicle!.plate})", location: location,
+      requestId: docRef.id,
+      serviceName: serviceTitle(selectedService!),
+      vehicleName: "${selectedVehicle!.name} (${selectedVehicle!.plate})",
+      location: location,
     )));
   }
 
@@ -214,7 +232,6 @@ class _Step2 extends StatelessWidget {
                         meta: d.data()["meta"] ?? "",
                         source: "saved"
                     )),
-                    // 🟢 ROUNDED BORDER REMOVED, RED TICK ADDED
                     child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                         child: Row(children: [
