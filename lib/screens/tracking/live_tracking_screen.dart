@@ -289,10 +289,20 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   }
 
   double _getProgressValue(String status) {
-    if (status == 'completed') return 1.0;
-    if (status == 'en route') return 0.75;
-    if (status == 'accepted') return 0.5;
-    return 0.25;
+    switch (status.toLowerCase()) {
+      case 'requested':
+        return 0.25; // 25% full
+      case 'accepted':
+        return 0.40; // 50% full
+      case 'en route':
+        return 0.60; // 75% full
+      case 'arrived':
+        return 0.80; // 95% full (Almost there!)
+      case 'completed':
+        return 1.0;  // 100% full
+      default:
+        return 0.1;
+    }
   }
 
   void _showCancelDialog(BuildContext context) {

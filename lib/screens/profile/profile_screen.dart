@@ -89,7 +89,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       stream: userDocRef.collection("vehicles").snapshots(),
                       label: "Vehicles",
                     ),
-                    const _PStat(title: "5.0", sub: "Rating"),
                   ],
                 ),
               ),

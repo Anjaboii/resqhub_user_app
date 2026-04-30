@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // 👈 Add this
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../request/request_flow.dart';
-import '../tracking/live_tracking_screen.dart'; // 👈 Add this to link back
+import '../tracking/live_tracking_screen.dart';
+import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,10 +44,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: CircleAvatar(radius: 150, backgroundColor: AppTheme.accent.withOpacity(0.05)),
           ),
           SafeArea(
-            child: Column( // Changed to Column to keep the banner fixed at the top
+            child: Column(
               children: [
-
-                // 🛰️ 1. ACTIVE REQUEST BANNER (The New Feature)
+                // 🛰️ 1. ACTIVE REQUEST BANNER
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('requests')
@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const SizedBox.shrink(); // Show nothing if no active request
+                      return const SizedBox.shrink();
                     }
 
                     final reqDoc = snapshot.data!.docs.first;
@@ -65,12 +65,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       margin: const EdgeInsets.all(16),
                       child: GlassCard(
                         onTap: () {
-                          // Jump back to the tracking screen
                           Navigator.push(context, MaterialPageRoute(
                             builder: (_) => LiveTrackingScreen(
                               requestId: reqDoc.id,
                               serviceName: reqData['serviceType'] ?? "",
-                              vehicleName: "", // Can be fetched from data
+                              vehicleName: reqData['vehicle']?['name'] ?? "",
                               location: reqData['locationText'] ?? "",
                             ),
                           ));
@@ -97,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   },
                 ),
 
-                // 📄 2. REST OF THE HOME CONTENT
+                // 📄 2. HOME CONTENT
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -113,16 +112,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                             ],
                           ),
-                          const CircleAvatar(backgroundColor: AppTheme.accent, child: Icon(Icons.person, color: Colors.white)),
+                          // 🔔 NOTIFICATION CENTER BUTTON
+                          Stack(
+                            alignment: Alignment.topRight,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 28),
+                                onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const NotificationScreen())
+                                ),
+                              ),
+                              Positioned(
+                                top: 10, right: 10,
+                                child: Container(
+                                  width: 8, height: 8,
+                                  decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                       const SizedBox(height: 30),
                       GlassCard(
-                        child: Row(
+                        child: const Row(
                           children: [
-                            const Icon(Icons.verified_user_rounded, color: Colors.greenAccent),
-                            const SizedBox(width: 12),
-                            const Expanded(
+                            Icon(Icons.verified_user_rounded, color: Colors.greenAccent),
+                            SizedBox(width: 12),
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
