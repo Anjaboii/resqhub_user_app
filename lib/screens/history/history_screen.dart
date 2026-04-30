@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../tracking/live_tracking_screen.dart';
+import 'service_detail_screen.dart'; // 🎯 Ensure this import points to your new file
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -88,9 +89,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         border: Border.all(color: AppTheme.stroke.withOpacity(0.5)),
                       ),
                       child: ListTile(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveTrackingScreen(
-                            requestId: docs[i].id, serviceName: data['serviceType'] ?? "",
-                            vehicleName: data['vehicle']?['name'] ?? "", location: data['locationText'] ?? ""))),
+                        // 🎯 UPDATED NAVIGATION LOGIC
+                        onTap: () {
+                          if (status == 'completed' || status == 'cancelled') {
+                            // Go to static summary for past trips
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ServiceDetailScreen(jobData: data),
+                              ),
+                            );
+                          } else {
+                            // Go to live tracking for active trips
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => LiveTrackingScreen(
+                                  requestId: docs[i].id,
+                                  serviceName: data['serviceType'] ?? "",
+                                  vehicleName: data['vehicle']?['name'] ?? "",
+                                  location: data['locationText'] ?? "",
+                                ),
+                              ),
+                            );
+                          }
+                        },
                         contentPadding: const EdgeInsets.all(16),
                         title: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

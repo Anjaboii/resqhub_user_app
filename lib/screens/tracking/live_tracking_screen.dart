@@ -23,13 +23,13 @@ class LiveTrackingScreen extends StatefulWidget {
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   final Completer<GoogleMapController> _controller = Completer();
   bool _isAutoCameraEnabled = true;
+  int _userRating = 0; // 🎯 Track user feedback
 
   bool _isAtLeast(String current, String target) {
     const order = ['requested', 'accepted', 'en route', 'arrived', 'completed'];
     return order.indexOf(current) >= order.indexOf(target);
   }
 
-  // 🔄 Recenter camera on User
   void _recenterUser(LatLng userLoc) async {
     final GoogleMapController controller = await _controller.future;
     setState(() => _isAutoCameraEnabled = true);
@@ -38,7 +38,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     ));
   }
 
-  // 🔄 Update camera to show both User and Provider
   void _updateCamera(LatLng userLoc, LatLng driverLoc) async {
     if (!_isAutoCameraEnabled) return;
 
@@ -50,6 +49,79 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       bounds = LatLngBounds(southwest: userLoc, northeast: driverLoc);
     }
     controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 70));
+  }
+
+  // 👤 NEW: Personalized Rating & Completion View
+  Widget _buildRatingView(Map<String, dynamic> reqData) {
+    return Container(
+      color: AppTheme.bg,
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: GlassCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.green, size: 60),
+              const SizedBox(height: 12),
+              const Text("Job Completed!",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+              const Divider(height: 40, color: Colors.white10),
+
+              // Driver Profile Section
+              Column(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: AppTheme.accent.withOpacity(0.2),
+                    child: const Icon(Icons.person, color: AppTheme.accent, size: 40),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    reqData['providerName'] ?? "Your Rescuer",
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const Text("Service Provider", style: TextStyle(color: AppTheme.textDim, fontSize: 14)),
+                ],
+              ),
+
+              const SizedBox(height: 30),
+              const Text("How was your experience?", style: TextStyle(color: Colors.white70, fontSize: 15)),
+              const SizedBox(height: 16),
+
+              // Star Rating Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < _userRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                      color: AppTheme.accent,
+                      size: 38,
+                    ),
+                    onPressed: () => setState(() => _userRating = index + 1),
+                  );
+                }),
+              ),
+
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+                  child: const Text("SUBMIT & CONTINUE",
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -77,6 +149,11 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             final String? providerId = reqData['providerId'];
             final userLoc = LatLng(reqData['lat'] ?? 0, reqData['lng'] ?? 0);
 
+            // 🎯 Intercept completion to prevent Red Screen errors
+            if (status == 'completed') {
+              return _buildRatingView(reqData);
+            }
+
             if (status == 'cancelled') {
               WidgetsBinding.instance.addPostFrameCallback((_) => Navigator.of(context).popUntil((route) => route.isFirst));
             }
@@ -96,14 +173,17 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
                           if (pSnap.hasData && pSnap.data!.exists) {
                             var pData = pSnap.data!.data() as Map<String, dynamic>;
-                            var driverLoc = LatLng(pData['currentLat'], pData['currentLng']);
-                            markers.add(Marker(
-                              markerId: const MarkerId("driver"),
-                              position: driverLoc,
-                              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-                              infoWindow: InfoWindow(title: reqData['providerName'] ?? "Rescuer"),
-                            ));
-                            _updateCamera(userLoc, driverLoc);
+                            // Null-safe check for coordinates
+                            if (pData['currentLat'] != null && pData['currentLng'] != null) {
+                              var driverLoc = LatLng(pData['currentLat'], pData['currentLng']);
+                              markers.add(Marker(
+                                markerId: const MarkerId("driver"),
+                                position: driverLoc,
+                                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+                                infoWindow: InfoWindow(title: reqData['providerName'] ?? "Rescuer"),
+                              ));
+                              _updateCamera(userLoc, driverLoc);
+                            }
                           }
 
                           return GoogleMap(
@@ -112,14 +192,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                             onMapCreated: (c) => _controller.complete(c),
                             myLocationButtonEnabled: false,
                             zoomControlsEnabled: false,
-                            // Disable auto-tracking if user manually moves the map
                             onCameraMoveStarted: () {
                               if (_isAutoCameraEnabled) setState(() => _isAutoCameraEnabled = false);
                             },
                           );
                         },
                       ),
-                      // 🎯 RECENTER BUTTON
                       Positioned(
                         bottom: 16,
                         right: 16,
