@@ -60,14 +60,11 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
   @override
   void dispose() { details.dispose(); tempName.dispose(); tempPlate.dispose(); tempMeta.dispose(); super.dispose(); }
 
-  // 🛠️ UPDATED: Now fetches and includes userPhone
   Future<void> _submitRequest() async {
     final u = FirebaseAuth.instance.currentUser!;
-
-    // 🟢 Fetching user details (Name and Phone)
     final doc = await FirebaseFirestore.instance.collection("users").doc(u.uid).get();
     final uName = doc.data()?["fullName"] ?? u.displayName ?? "User";
-    final uPhone = doc.data()?["phone"] ?? ""; // 🎯 Fetching phone
+    final uPhone = doc.data()?["phone"] ?? "";
 
     final data = {
       "userId": u.uid,
@@ -82,11 +79,13 @@ class _RequestFlowScreenState extends State<RequestFlowScreen> {
       "createdAt": FieldValue.serverTimestamp(),
       "providerName": "",
       "providerPhone": "",
+      "rating": 0.0,
+      "review": "",
+      "ratingStatus": "none",
     };
 
     if (details.text.trim().isNotEmpty) data["details"] = details.text.trim();
 
-    // 🟢 Adding to requests collection
     final docRef = await FirebaseFirestore.instance.collection("requests").add(data);
 
     if (!mounted) return;

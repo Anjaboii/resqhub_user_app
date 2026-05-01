@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../tracking/live_tracking_screen.dart';
-import 'service_detail_screen.dart'; // 🎯 Ensure this import points to your new file
+import 'service_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -89,10 +89,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         border: Border.all(color: AppTheme.stroke.withOpacity(0.5)),
                       ),
                       child: ListTile(
-                        // 🎯 UPDATED NAVIGATION LOGIC
                         onTap: () {
                           if (status == 'completed' || status == 'cancelled') {
-                            // Go to static summary for past trips
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -100,7 +98,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               ),
                             );
                           } else {
-                            // Go to live tracking for active trips
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -127,6 +124,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           children: [
                             const SizedBox(height: 8),
                             Text("${data['vehicle']?['name']} • ${data['vehicle']?['plate']}", style: const TextStyle(color: Colors.white70)),
+
+                            if (status == 'completed' && data['rating'] != null && data['rating'] > 0)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    ...List.generate(5, (index) => Icon(
+                                      Icons.star_rounded,
+                                      size: 14,
+                                      color: index < (data['rating'] as num).toInt() ? Colors.amber : Colors.white24,
+                                    )),
+                                    const SizedBox(width: 6),
+                                    Text("${data['rating']}", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+
                             const SizedBox(height: 4),
                             Row(children: [
                               const Icon(Icons.location_on, size: 14, color: AppTheme.textDim),
