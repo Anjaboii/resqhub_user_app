@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../tracking/live_tracking_screen.dart';
+import '../tracking/live_tracking_dispatcher.dart'; // ← changed
 import 'service_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -78,7 +78,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   itemBuilder: (context, i) {
                     final data = docs[i].data();
                     final status = data['status'] ?? 'requested';
-                    Color statusColor = status == 'completed' ? Colors.greenAccent : (status == 'cancelled' ? Colors.redAccent : Colors.orangeAccent);
+                    Color statusColor = status == 'completed'
+                        ? Colors.greenAccent
+                        : (status == 'cancelled' ? Colors.redAccent : Colors.orangeAccent);
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -90,40 +92,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: ListTile(
                         onTap: () {
                           if (status == 'completed' || status == 'cancelled') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ServiceDetailScreen(jobData: data),
-                              ),
-                            );
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ServiceDetailScreen(jobData: data),
+                            ));
                           } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => LiveTrackingScreen(
-                                  requestId: docs[i].id,
-                                  serviceName: data['serviceType'] ?? "",
-                                  vehicleName: data['vehicle']?['name'] ?? "",
-                                  location: data['locationText'] ?? "",
-                                ),
-                              ),
-                            );
+                            // ← changed: TrackingDispatcher handles routing automatically
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => TrackingDispatcher(requestId: docs[i].id),
+                            ));
                           }
                         },
                         contentPadding: const EdgeInsets.all(16),
                         title: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(data['serviceType']?.toUpperCase() ?? "SERVICE", style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                            Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                            Text(data['serviceType']?.toUpperCase() ?? "SERVICE",
+                                style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                            Text(status.toUpperCase(),
+                                style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
                           ],
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 8),
-                            Text("${data['vehicle']?['name']} • ${data['vehicle']?['plate']}", style: const TextStyle(color: Colors.white70)),
-
+                            Text("${data['vehicle']?['name']} • ${data['vehicle']?['plate']}",
+                                style: const TextStyle(color: Colors.white70)),
                             if (status == 'completed' && data['rating'] != null && data['rating'] > 0)
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -132,19 +126,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     ...List.generate(5, (index) => Icon(
                                       Icons.star_rounded,
                                       size: 14,
-                                      color: index < (data['rating'] as num).toInt() ? Colors.amber : Colors.white24,
+                                      color: index < (data['rating'] as num).toInt()
+                                          ? Colors.amber
+                                          : Colors.white24,
                                     )),
                                     const SizedBox(width: 6),
-                                    Text("${data['rating']}", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    Text("${data['rating']}",
+                                        style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ),
-
                             const SizedBox(height: 4),
                             Row(children: [
                               const Icon(Icons.location_on, size: 14, color: AppTheme.textDim),
                               const SizedBox(width: 4),
-                              Expanded(child: Text(data['locationText'] ?? "", style: const TextStyle(color: AppTheme.textDim, fontSize: 12), overflow: TextOverflow.ellipsis)),
+                              Expanded(child: Text(data['locationText'] ?? "",
+                                  style: const TextStyle(color: AppTheme.textDim, fontSize: 12),
+                                  overflow: TextOverflow.ellipsis)),
                             ]),
                           ],
                         ),

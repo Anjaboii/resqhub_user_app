@@ -17,10 +17,10 @@ class RequestVehicle {
 }
 
 // Services available per mode
-const List<ServiceType> carrierServices = [ServiceType.fuel, ServiceType.towing];
+const List<ServiceType> carrierServices = [ServiceType.fuel, ServiceType.towing, ServiceType.accident ];
 const List<ServiceType> garageServices = [
   ServiceType.battery, ServiceType.flatTire, ServiceType.lockout,
-  ServiceType.engine, ServiceType.accident, ServiceType.other,
+  ServiceType.engine, ServiceType.other,
 ];
 
 class RequestFlowScreen extends StatefulWidget {

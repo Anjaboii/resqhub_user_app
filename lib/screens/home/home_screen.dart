@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../request/request_flow.dart';
-import '../tracking/live_tracking_screen.dart';
+import '../tracking/live_tracking_dispatcher.dart';
 import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -51,7 +51,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   stream: FirebaseFirestore.instance
                       .collection('requests')
                       .where('userId', isEqualTo: user?.uid)
-                      .where('status', whereIn: ['requested', 'accepted', 'en route', 'arrived'])
+                      .where('status', whereIn: [
+                    'requested', 'accepted', 'en_route', 'arrived',
+                    'towing', 'in_progress',
+                  ])
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -66,12 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       child: GlassCard(
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => LiveTrackingScreen(
-                              requestId: reqDoc.id,
-                              serviceName: reqData['serviceType'] ?? "",
-                              vehicleName: reqData['vehicle']?['name'] ?? "",
-                              location: reqData['locationText'] ?? "",
-                            ),
+                            builder: (_) => TrackingDispatcher(requestId: reqDoc.id),
                           ));
                         },
                         child: Row(
@@ -82,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Request Active: ${reqData['status']?.toUpperCase()}",
+                                  Text("Request Active: ${reqData['status']?.toUpperCase().replaceAll('_', ' ')}",
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orangeAccent)),
                                   const Text("Tap to view live tracking", style: TextStyle(fontSize: 11, color: AppTheme.textDim)),
                                 ],
