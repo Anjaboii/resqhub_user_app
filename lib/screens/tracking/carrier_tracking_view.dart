@@ -6,10 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 
-class LiveTrackingScreen extends StatefulWidget {
+// Renamed to CarrierTrackingView to match your TrackingDispatcher
+class CarrierTrackingView extends StatefulWidget {
   final String requestId, serviceName, vehicleName, location;
 
-  const LiveTrackingScreen({
+  const CarrierTrackingView({
     super.key,
     required this.requestId,
     required this.serviceName,
@@ -18,13 +19,14 @@ class LiveTrackingScreen extends StatefulWidget {
   });
 
   @override
-  State<LiveTrackingScreen> createState() => _LiveTrackingScreenState();
+  State<CarrierTrackingView> createState() => _CarrierTrackingViewState();
 }
 
-class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
+class _CarrierTrackingViewState extends State<CarrierTrackingView> {
   final Completer<GoogleMapController> _controller = Completer();
   bool _isAutoCameraEnabled = true;
   int _userRating = 0;
+
   bool _isAtLeast(String current, String target) {
     const order = ['requested', 'accepted', 'en route', 'arrived', 'in_progress', 'completed'];
     return order.indexOf(current) >= order.indexOf(target);
@@ -62,7 +64,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 70));
   }
 
-  // 🛠️ NEW: Cancel Dialog Logic
   void _showCancelDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -151,7 +152,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       canPop: false,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Tracking Assistance", style: TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text("Tracking Carrier", style: TextStyle(fontWeight: FontWeight.w900)),
           automaticallyImplyLeading: false,
           actions: [
             IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent), onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst)),
@@ -250,7 +251,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                       _StatusItem(active: _isAtLeast(status, 'in_progress'), title: reqData['serviceType'] == 'towing' ? "Towing Trip" : "Repairing", sub: "Work is currently in progress", isPending: status == 'in_progress'),
                       _StatusItem(active: _isAtLeast(status, 'completed'), title: "Service Complete", sub: "Your issue has been resolved", isLast: true),
 
-                      // 🛠️ UPDATED: Cancel Button Section
                       if (status == 'requested')
                         Padding(
                           padding: const EdgeInsets.only(top: 40, bottom: 20),
@@ -265,7 +265,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                             ),
                           ),
                         ),
-                      const SizedBox(height: 30), // Extra padding at bottom
+                      const SizedBox(height: 30),
                     ],
                   ),
                 ),
