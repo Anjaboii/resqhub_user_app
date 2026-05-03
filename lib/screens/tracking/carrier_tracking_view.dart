@@ -6,6 +6,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import '../payment/payment_screen.dart';
 
 class CarrierTrackingView extends StatefulWidget {
   final String requestId, serviceName, vehicleName, location;
@@ -150,16 +151,14 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                 children: [
                   const Text(
                       "Where should the carrier deliver your vehicle?",
-                      style:
-                      TextStyle(color: AppTheme.textDim, fontSize: 13)),
+                      style: TextStyle(color: AppTheme.textDim, fontSize: 13)),
                   const SizedBox(height: 16),
                   TextField(
                     controller: destController,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: "e.g. Nelundeniya",
-                      hintStyle:
-                      const TextStyle(color: AppTheme.textDim),
+                      hintStyle: const TextStyle(color: AppTheme.textDim),
                       errorText: errorText,
                       filled: true,
                       fillColor: AppTheme.stroke,
@@ -168,10 +167,9 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                           borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                          const BorderSide(color: AppTheme.accent)),
-                      prefixIcon: const Icon(Icons.search,
-                          color: AppTheme.textDim),
+                          borderSide: const BorderSide(color: AppTheme.accent)),
+                      prefixIcon:
+                      const Icon(Icons.search, color: AppTheme.textDim),
                     ),
                   ),
                 ],
@@ -191,8 +189,8 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                         : () async {
                       final input = destController.text.trim();
                       if (input.isEmpty) {
-                        setDialogState(() => errorText =
-                        "Please enter a destination");
+                        setDialogState(() =>
+                        errorText = "Please enter a destination");
                         return;
                       }
                       setDialogState(() {
@@ -215,8 +213,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                           'destinationSetAt':
                           FieldValue.serverTimestamp(),
                         });
-                        setState(
-                                () => _destinationSubmitted = true);
+                        setState(() => _destinationSubmitted = true);
                         if (mounted) Navigator.of(context).pop();
                       } catch (e) {
                         setDialogState(() {
@@ -273,27 +270,36 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final reqData =
-            snapshot.data!.data() as Map<String, dynamic>;
+            final reqData = snapshot.data!.data() as Map<String, dynamic>;
             final String status =
             (reqData['status'] ?? 'requested').toString().toLowerCase();
             final String? providerId = reqData['providerId'];
             final bool isTowing = reqData['serviceType'] == 'towing';
             final bool isFuel = reqData['serviceType'] == 'fuel';
             final bool isAccident = reqData['serviceType'] == 'accident';
-            final userLoc = LatLng(
-                (reqData['lat'] as num).toDouble(),
+            final userLoc = LatLng((reqData['lat'] as num).toDouble(),
                 (reqData['lng'] as num).toDouble());
-            final order = isTowing ? _towingOrder : isAccident ? _accidentOrder : _fuelOrder;
+            final order = isTowing
+                ? _towingOrder
+                : isAccident
+                ? _accidentOrder
+                : _fuelOrder;
 
+            // ✅ Payment first, then rating
             if (status == 'completed') {
+              if (reqData['paymentStatus'] != 'paid') {
+                return PaymentScreen(
+                  requestId: widget.requestId,
+                  reqData: reqData,
+                  onPaymentComplete: () => setState(() {}),
+                );
+              }
               return _buildRatingView(reqData);
             }
 
             if (status == 'cancelled') {
               WidgetsBinding.instance.addPostFrameCallback((_) =>
-                  Navigator.of(context)
-                      .popUntil((route) => route.isFirst));
+                  Navigator.of(context).popUntil((route) => route.isFirst));
               return const Center(child: CircularProgressIndicator());
             }
 
@@ -302,8 +308,8 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                 status == 'towing' &&
                 !_destinationSubmitted &&
                 reqData['destinationLat'] == null) {
-              WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _showDestinationDialog());
+              WidgetsBinding.instance
+                  .addPostFrameCallback((_) => _showDestinationDialog());
             }
 
             if (reqData['destinationLat'] != null) {
@@ -335,8 +341,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                           if (reqData['destinationLat'] != null) {
                             markers.add(Marker(
                               markerId: const MarkerId("destination"),
-                              position: LatLng(
-                                  reqData['destinationLat'],
+                              position: LatLng(reqData['destinationLat'],
                                   reqData['destinationLng']),
                               icon: BitmapDescriptor.defaultMarkerWithHue(
                                   BitmapDescriptor.hueGreen),
@@ -347,8 +352,8 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                           }
 
                           if (pSnap.hasData && pSnap.data!.exists) {
-                            var pData = pSnap.data!.data()
-                            as Map<String, dynamic>;
+                            var pData =
+                            pSnap.data!.data() as Map<String, dynamic>;
                             var driverLoc = LatLng(
                                 (pData['currentLat'] as num).toDouble(),
                                 (pData['currentLng'] as num).toDouble());
@@ -358,24 +363,22 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                               icon: BitmapDescriptor.defaultMarkerWithHue(
                                   BitmapDescriptor.hueAzure),
                               infoWindow: InfoWindow(
-                                  title: reqData['providerName'] ??
-                                      "Carrier"),
+                                  title:
+                                  reqData['providerName'] ?? "Carrier"),
                             ));
                             _updateCamera(userLoc, driverLoc);
                           }
 
                           return GoogleMap(
-                            initialCameraPosition: CameraPosition(
-                                target: userLoc, zoom: 15),
+                            initialCameraPosition:
+                            CameraPosition(target: userLoc, zoom: 15),
                             markers: markers,
-                            onMapCreated: (c) =>
-                                _controller.complete(c),
+                            onMapCreated: (c) => _controller.complete(c),
                             myLocationButtonEnabled: false,
                             zoomControlsEnabled: false,
                             onCameraMoveStarted: () {
                               if (_isAutoCameraEnabled)
-                                setState(() =>
-                                _isAutoCameraEnabled = false);
+                                setState(() => _isAutoCameraEnabled = false);
                             },
                           );
                         },
@@ -384,8 +387,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                         bottom: 16,
                         right: 16,
                         child: FloatingActionButton.small(
-                          backgroundColor:
-                          AppTheme.bg.withOpacity(0.9),
+                          backgroundColor: AppTheme.bg.withOpacity(0.9),
                           onPressed: () => _recenterUser(userLoc),
                           child: Icon(Icons.my_location_rounded,
                               color: _isAutoCameraEnabled
@@ -409,12 +411,9 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                                   horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
                                   color: AppTheme.accent.withOpacity(0.1),
-                                  borderRadius:
-                                  BorderRadius.circular(20)),
+                                  borderRadius: BorderRadius.circular(20)),
                               child: Text(
-                                  status
-                                      .toUpperCase()
-                                      .replaceAll('_', ' '),
+                                  status.toUpperCase().replaceAll('_', ' '),
                                   style: const TextStyle(
                                       color: AppTheme.accent,
                                       fontWeight: FontWeight.w900,
@@ -434,13 +433,10 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                                       crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                            reqData['providerName'] ??
-                                                "Carrier",
+                                        Text(reqData['providerName'] ?? "Carrier",
                                             style: const TextStyle(
                                                 fontSize: 18,
-                                                fontWeight:
-                                                FontWeight.bold)),
+                                                fontWeight: FontWeight.bold)),
                                         Text(
                                             isFuel
                                                 ? "Fuel delivery in progress"
@@ -465,8 +461,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                               ),
                             const SizedBox(height: 16),
                             LinearProgressIndicator(
-                              value:
-                              _getProgressValue(status, isTowing),
+                              value: _getProgressValue(status, isTowing),
                               backgroundColor: AppTheme.stroke,
                               color: AppTheme.accent,
                             ),
@@ -476,27 +471,22 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
-                                    color:
-                                    Colors.orange.withOpacity(0.1),
-                                    borderRadius:
-                                    BorderRadius.circular(10),
+                                    color: Colors.orange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
-                                        color: Colors.orange
-                                            .withOpacity(0.3))),
+                                        color:
+                                        Colors.orange.withOpacity(0.3))),
                                 child: Row(
                                   children: [
-                                    const Icon(
-                                        Icons.local_gas_station,
-                                        color: Colors.orange,
-                                        size: 16),
+                                    const Icon(Icons.local_gas_station,
+                                        color: Colors.orange, size: 16),
                                     const SizedBox(width: 8),
                                     Text(
                                         "${reqData['fuelType'] ?? 'Fuel'} — ${reqData['fuelQuantity'] ?? '?'} Liters",
                                         style: const TextStyle(
                                             color: Colors.orange,
                                             fontSize: 13,
-                                            fontWeight:
-                                            FontWeight.w600)),
+                                            fontWeight: FontWeight.w600)),
                                   ],
                                 ),
                               ),
@@ -509,13 +499,11 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
-                                    color:
-                                    Colors.green.withOpacity(0.1),
-                                    borderRadius:
-                                    BorderRadius.circular(10),
+                                    color: Colors.green.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
-                                        color: Colors.green
-                                            .withOpacity(0.3))),
+                                        color:
+                                        Colors.green.withOpacity(0.3))),
                                 child: Row(
                                   children: [
                                     const Icon(Icons.location_on,
@@ -551,8 +539,8 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                       // Cancel button — only when still searching
                       if (status == 'requested')
                         Padding(
-                          padding: const EdgeInsets.only(
-                              top: 32, bottom: 16),
+                          padding:
+                          const EdgeInsets.only(top: 32, bottom: 16),
                           child: Center(
                             child: TextButton.icon(
                               onPressed: _showCancelDialog,
@@ -649,12 +637,10 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                       fontWeight: FontWeight.bold,
                       color: Colors.white)),
               const Text("Service Provider",
-                  style:
-                  TextStyle(color: AppTheme.textDim, fontSize: 14)),
+                  style: TextStyle(color: AppTheme.textDim, fontSize: 14)),
               const SizedBox(height: 30),
               const Text("How was your experience?",
-                  style:
-                  TextStyle(color: Colors.white70, fontSize: 15)),
+                  style: TextStyle(color: Colors.white70, fontSize: 15)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -666,8 +652,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                             : Icons.star_outline_rounded,
                         color: AppTheme.accent,
                         size: 38),
-                    onPressed: () =>
-                        setState(() => _userRating = index + 1),
+                    onPressed: () => setState(() => _userRating = index + 1),
                   );
                 }),
               ),
@@ -677,8 +662,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accent,
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
@@ -697,8 +681,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                   },
                   child: const Text("SUBMIT & CONTINUE",
                       style: TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold)),
+                          color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -724,10 +707,8 @@ class _StatusItem extends StatelessWidget {
       child: Row(
         children: [
           Column(children: [
-            Icon(
-                active ? Icons.check_circle : Icons.circle_outlined,
-                color: active ? AppTheme.accent : AppTheme.textDim,
-                size: 24),
+            Icon(active ? Icons.check_circle : Icons.circle_outlined,
+                color: active ? AppTheme.accent : AppTheme.textDim, size: 24),
             if (!isLast)
               Expanded(
                   child: Container(

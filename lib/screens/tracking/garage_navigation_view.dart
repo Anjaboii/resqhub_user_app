@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import '../payment/payment_screen.dart';
 
 class GarageNavigationView extends StatefulWidget {
   final Map<String, dynamic> reqData;
@@ -61,9 +62,77 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
               }
             },
             child: const Text("YES, CANCEL",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRatingView(Map<String, dynamic> data) {
+    final String garageName = data['garageName'] ?? 'Your Garage';
+    final num? price = data['price'] as num?;
+
+    return Container(
+      color: AppTheme.bg,
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: GlassCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: Colors.green, size: 60),
+              const SizedBox(height: 12),
+              const Text("Job Completed!",
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
+              if (price != null) ...[
+                const SizedBox(height: 8),
+                Text("LKR ${price.toStringAsFixed(0)}",
+                    style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.accent)),
+              ],
+              const Divider(height: 40, color: Colors.white10),
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: AppTheme.accent.withOpacity(0.2),
+                child: const Icon(Icons.store_rounded,
+                    color: AppTheme.accent, size: 40),
+              ),
+              const SizedBox(height: 12),
+              Text(garageName,
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
+              const Text("Service Provider",
+                  style: TextStyle(color: AppTheme.textDim, fontSize: 14)),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () =>
+                      Navigator.of(context).popUntil((route) => route.isFirst),
+                  child: const Text("DONE",
+                      style: TextStyle(
+                          color: Colors.black, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -108,8 +177,16 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // ✅ Payment first, then rating
           if (status == 'completed') {
-            return _buildCompletedView(data);
+            if (data['paymentStatus'] != 'paid') {
+              return PaymentScreen(
+                requestId: widget.requestId,
+                reqData: data,
+                onPaymentComplete: () => setState(() {}),
+              );
+            }
+            return _buildRatingView(data);
           }
 
           // No provider assigned yet — still searching
@@ -178,14 +255,11 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color:
-                                    AppTheme.accent.withOpacity(0.1),
+                                    color: AppTheme.accent.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
-                                    status
-                                        .toUpperCase()
-                                        .replaceAll('_', ' '),
+                                    status.toUpperCase().replaceAll('_', ' '),
                                     style: const TextStyle(
                                         color: AppTheme.accent,
                                         fontWeight: FontWeight.w900,
@@ -221,15 +295,12 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
                                     onPressed: () async {
                                       final url =
                                           'https://www.google.com/maps/dir/?api=1&destination=$garageLat,$garageLng&travelmode=driving';
-                                      if (await canLaunchUrl(
-                                          Uri.parse(url))) {
+                                      if (await canLaunchUrl(Uri.parse(url))) {
                                         await launchUrl(Uri.parse(url),
-                                            mode: LaunchMode
-                                                .externalApplication);
+                                            mode: LaunchMode.externalApplication);
                                       }
                                     },
-                                    icon: const Icon(
-                                        Icons.navigation_rounded,
+                                    icon: const Icon(Icons.navigation_rounded,
                                         color: Colors.black),
                                     style: IconButton.styleFrom(
                                         backgroundColor: AppTheme.accent),
@@ -373,8 +444,6 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
                   title: "Job Finished",
                   sub: "Service complete. Drive safe!",
                   isLast: true),
-
-              // Cancel button — only when still searching
               if (status == 'requested')
                 Padding(
                   padding: const EdgeInsets.only(top: 32, bottom: 16),
@@ -397,74 +466,6 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCompletedView(Map<String, dynamic> data) {
-    final String garageName = data['garageName'] ?? 'Your Garage';
-    final num? price = data['price'] as num?;
-
-    return Container(
-      color: AppTheme.bg,
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: GlassCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle_rounded,
-                  color: Colors.green, size: 60),
-              const SizedBox(height: 12),
-              const Text("Job Completed!",
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              if (price != null) ...[
-                const SizedBox(height: 8),
-                Text("LKR ${price.toStringAsFixed(0)}",
-                    style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.accent)),
-              ],
-              const Divider(height: 40, color: Colors.white10),
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: AppTheme.accent.withOpacity(0.2),
-                child: const Icon(Icons.store_rounded,
-                    color: AppTheme.accent, size: 40),
-              ),
-              const SizedBox(height: 12),
-              Text(garageName,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              const Text("Service Provider",
-                  style:
-                  TextStyle(color: AppTheme.textDim, fontSize: 14)),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () =>
-                      Navigator.of(context).popUntil((route) => route.isFirst),
-                  child: const Text("DONE",
-                      style: TextStyle(
-                          color: Colors.black, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -509,8 +510,7 @@ class _StatusStep extends StatelessWidget {
                   Text(title,
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color:
-                          active ? Colors.white : AppTheme.textDim)),
+                          color: active ? Colors.white : AppTheme.textDim)),
                   Text(sub,
                       style: TextStyle(
                           fontSize: 12,
