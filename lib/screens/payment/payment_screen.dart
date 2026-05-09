@@ -47,11 +47,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Logic to handle the data from your Firestore Screenshot
     final num price = widget.reqData['price'] ?? 0;
-    final String serviceType = widget.reqData['serviceType'] ?? '';
-    final String providerName = widget.reqData['providerName'] ??
-        widget.reqData['garageName'] ?? 'Provider';
-    final bool isGarage = widget.reqData['providerRole'] == 'garage';
+    final String rawServiceType = (widget.reqData['serviceType'] ?? '').toString();
+
+    // Fix: Check for garageName first as per your Firestore screenshot
+    final String providerDisplayName = widget.reqData['garageName'] ??
+        widget.reqData['providerName'] ??
+        'Service Provider';
+
+    // Fix: Determine if it's a garage based on the data fields available
+    final bool isGarage = widget.reqData['garageName'] != null ||
+        widget.reqData['providerRole'] == 'garage' ||
+        (!['fuel', 'towing'].contains(rawServiceType.toLowerCase()));
 
     return Container(
       color: AppTheme.bg,
@@ -61,7 +69,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
+              // Header Icon
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -78,7 +86,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       fontWeight: FontWeight.w900,
                       color: Colors.white)),
               const SizedBox(height: 4),
-              Text(serviceType.toUpperCase().replaceAll('_', ' '),
+              Text(rawServiceType.toUpperCase().replaceAll('_', ' '),
                   style: const TextStyle(
                       color: AppTheme.textDim,
                       fontSize: 12,
@@ -86,7 +94,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       letterSpacing: 1.2)),
               const SizedBox(height: 24),
 
-              // Price Card
+              // Price Display Card
               GlassCard(
                 child: Column(
                   children: [
@@ -124,7 +132,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Provider Info
+              // Corrected Provider/Garage Information Section
               GlassCard(
                 child: Row(
                   children: [
@@ -139,10 +147,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(providerName,
+                          Text(providerDisplayName,
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white)),
+                                  color: Colors.white,
+                                  fontSize: 16)),
                           Text(isGarage ? "Garage Service" : "Carrier Service",
                               style: const TextStyle(
                                   color: AppTheme.textDim, fontSize: 12)),
@@ -154,7 +163,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Payment Method Selection
+              // Selection Header
               Align(
                 alignment: Alignment.centerLeft,
                 child: const Text("Select Payment Method",
@@ -164,6 +173,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         fontSize: 16)),
               ),
               const SizedBox(height: 12),
+
+              // Cash Option
               _PaymentMethodCard(
                 icon: Icons.payments_rounded,
                 title: "Cash",
@@ -172,6 +183,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 onTap: () => setState(() => _selectedMethod = 'cash'),
               ),
               const SizedBox(height: 10),
+
+              // Card Option
               _PaymentMethodCard(
                 icon: Icons.credit_card_rounded,
                 title: "Card",
@@ -181,13 +194,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Card details (shown only if card selected)
               if (_selectedMethod == 'card') ...[
                 _CardDetailsForm(),
                 const SizedBox(height: 24),
               ],
 
-              // Pay Button
+              // Submission Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -250,9 +262,7 @@ class _PaymentMethodCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.accent.withOpacity(0.1)
-              : AppTheme.card,
+          color: isSelected ? AppTheme.accent.withOpacity(0.05) : AppTheme.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? AppTheme.accent : Colors.white10,
@@ -264,40 +274,23 @@ class _PaymentMethodCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? AppTheme.accent.withOpacity(0.2)
-                    : Colors.white10,
+                color: isSelected ? AppTheme.accent.withOpacity(0.2) : Colors.white10,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon,
-                  color: isSelected ? AppTheme.accent : Colors.white54,
-                  size: 24),
+              child: Icon(icon, color: isSelected ? AppTheme.accent : Colors.white54),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color:
-                          isSelected ? Colors.white : Colors.white70)),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: isSelected
-                              ? AppTheme.textDim
-                              : AppTheme.textDim.withOpacity(0.5))),
+                  Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.white70)),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: AppTheme.textDim)),
                 ],
               ),
             ),
-            Icon(
-              isSelected
-                  ? Icons.check_circle_rounded
-                  : Icons.circle_outlined,
-              color: isSelected ? AppTheme.accent : Colors.white24,
-            ),
+            Icon(isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                color: isSelected ? AppTheme.accent : Colors.white24),
           ],
         ),
       ),
@@ -311,60 +304,33 @@ class _CardDetailsForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Card Details",
-            style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 16)),
+        const Text("Card Details", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
         const SizedBox(height: 12),
-        TextField(
-          style: const TextStyle(color: Colors.white),
-          keyboardType: TextInputType.number,
-          decoration: _inputDecoration("Card Number", Icons.credit_card),
-        ),
+        _buildField("Card Number", Icons.credit_card),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(
-              child: TextField(
-                style: const TextStyle(color: Colors.white),
-                decoration:
-                _inputDecoration("MM/YY", Icons.calendar_today),
-              ),
-            ),
+            Expanded(child: _buildField("MM/YY", Icons.calendar_today)),
             const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                style: const TextStyle(color: Colors.white),
-                obscureText: true,
-                decoration: _inputDecoration("CVV", Icons.lock_outline),
-              ),
-            ),
+            Expanded(child: _buildField("CVV", Icons.lock_outline, obscure: true)),
           ],
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          style: const TextStyle(color: Colors.white),
-          decoration:
-          _inputDecoration("Cardholder Name", Icons.person_outline),
         ),
       ],
     );
   }
 
-  InputDecoration _inputDecoration(String hint, IconData icon) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textDim),
-      prefixIcon: Icon(icon, color: AppTheme.textDim, size: 20),
-      filled: true,
-      fillColor: AppTheme.card,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppTheme.accent)),
+  Widget _buildField(String hint, IconData icon, {bool obscure = false}) {
+    return TextField(
+      obscureText: obscure,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppTheme.textDim),
+        prefixIcon: Icon(icon, color: AppTheme.textDim, size: 20),
+        filled: true,
+        fillColor: AppTheme.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+      ),
     );
   }
 }
