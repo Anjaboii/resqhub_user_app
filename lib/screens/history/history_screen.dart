@@ -96,7 +96,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: ListTile(
                         onTap: () {
                           if (status == 'completed' || status == 'cancelled') {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceDetailScreen(jobData: data)));
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceDetailScreen(jobData: data, requestId: docs[i].id)));
                           } else {
                             Navigator.push(context, MaterialPageRoute(builder: (_) => TrackingDispatcher(requestId: docs[i].id)));
                           }

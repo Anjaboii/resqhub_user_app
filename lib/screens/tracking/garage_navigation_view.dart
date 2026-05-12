@@ -20,6 +20,7 @@ class GarageNavigationView extends StatefulWidget {
 class _GarageNavigationViewState extends State<GarageNavigationView> {
   final Completer<GoogleMapController> _controller = Completer();
   String? _previousStatus;
+  int _userRating = 0;
 
   bool _isAtLeast(String current, String target) {
     const order = ['requested', 'accepted', 'arrived', 'in_progress', 'completed'];
@@ -83,12 +84,22 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
         const SizedBox(height: 12),
         Text(garageName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.getTextPrimary(isDark))),
         Text("Service Provider", style: TextStyle(color: AppTheme.getTextDim(isDark), fontSize: 14)),
+        const SizedBox(height: 30),
+        Text("How was your experience?", style: TextStyle(color: AppTheme.getTextPrimary(isDark).withValues(alpha: 0.7), fontSize: 15)),
+        const SizedBox(height: 16),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) => IconButton(
+          icon: Icon(i < _userRating ? Icons.star_rounded : Icons.star_outline_rounded, color: AppTheme.accent, size: 38),
+          onPressed: () => setState(() => _userRating = i + 1)))),
         const SizedBox(height: 32),
         SizedBox(width: double.infinity, child: ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent, padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-          child: const Text("DONE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          onPressed: () async {
+            if (_userRating == 0) return;
+            await FirebaseFirestore.instance.collection('requests').doc(widget.requestId).update({'rating': _userRating.toDouble(), 'ratingStatus': 'submitted'});
+            if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+          child: const Text("SUBMIT & CONTINUE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         )),
       ]))),
     );
