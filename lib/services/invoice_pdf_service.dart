@@ -19,9 +19,10 @@ class InvoicePdfService {
     final bool isGarage = providerRole == 'garage' ||
         ['battery', 'lockout', 'engine', 'flat_tire', 'flatTire'].contains(serviceType.toLowerCase());
 
-    final String providerName = jobData['garageName'] ??
-        jobData['providerName'] ?? 'Service Provider';
-    final String providerPhone = jobData['providerPhone'] ?? '';
+    final String providerName = (jobData['garageName']?.toString().isNotEmpty == true ? jobData['garageName'] : null) ??
+        (jobData['providerName']?.toString().isNotEmpty == true ? jobData['providerName'] : null) ?? 'Service Provider';
+    final String providerPhone = (jobData['garagePhone']?.toString().isNotEmpty == true ? jobData['garagePhone'] : null) ?? 
+        (jobData['providerPhone']?.toString().isNotEmpty == true ? jobData['providerPhone'] : null) ?? '';
     final String userName = jobData['userName'] ?? 'Customer';
     final String userPhone = jobData['userPhone'] ?? '';
     final String locationText = jobData['locationText'] ?? '';

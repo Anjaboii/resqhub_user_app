@@ -22,7 +22,7 @@
 </queries>
 
 <application
-    android:label="resqhub_user_app"
+    android:label="ResQHub"
     android:name="${applicationName}"
     android:icon="@mipmap/ic_launcher"
     android:enableOnBackInvokedCallback="true">

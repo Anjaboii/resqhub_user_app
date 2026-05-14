@@ -80,7 +80,16 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
         Text("Job Completed!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.getTextPrimary(isDark))),
         if (price != null) ...[const SizedBox(height: 8), Text("LKR ${price.toStringAsFixed(0)}", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppTheme.accent))],
         Divider(height: 40, color: isDark ? Colors.white10 : Colors.grey.shade200),
-        CircleAvatar(radius: 40, backgroundColor: AppTheme.accent.withValues(alpha: 0.2), child: const Icon(Icons.store_rounded, color: AppTheme.accent, size: 40)),
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: AppTheme.accent.withValues(alpha: 0.2),
+          backgroundImage: data['providerPic'] != null && data['providerPic'].toString().isNotEmpty
+              ? NetworkImage(data['providerPic'])
+              : null,
+          child: data['providerPic'] != null && data['providerPic'].toString().isNotEmpty
+              ? null
+              : const Icon(Icons.store_rounded, color: AppTheme.accent, size: 40),
+        ),
         const SizedBox(height: 12),
         Text(garageName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.getTextPrimary(isDark))),
         Text("Service Provider", style: TextStyle(color: AppTheme.getTextDim(isDark), fontSize: 14)),
@@ -200,7 +209,15 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
                       child: Text(status.toUpperCase().replaceAll('_', ' '), style: const TextStyle(color: AppTheme.accent, fontWeight: FontWeight.w900, fontSize: 12))),
                     const SizedBox(height: 16),
                     Row(children: [
-                      const CircleAvatar(backgroundColor: AppTheme.accent, child: Icon(Icons.store_rounded, color: Colors.white)),
+                      CircleAvatar(
+                        backgroundColor: AppTheme.accent,
+                        backgroundImage: data['providerPic'] != null && data['providerPic'].toString().isNotEmpty
+                            ? NetworkImage(data['providerPic'])
+                            : null,
+                        child: data['providerPic'] != null && data['providerPic'].toString().isNotEmpty
+                            ? null
+                            : const Icon(Icons.store_rounded, color: Colors.white),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(garageName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),

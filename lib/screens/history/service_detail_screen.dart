@@ -172,12 +172,22 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 children: [
                   CircleAvatar(
                     radius: 35,
-                    backgroundColor: AppTheme.accent, // 🎨 Using your AppTheme accent
-                    child: const Icon(Icons.person, color: Colors.black, size: 35),
+                    backgroundColor: AppTheme.accent,
+                    backgroundImage: widget.jobData['providerPic'] != null && widget.jobData['providerPic'].toString().isNotEmpty
+                        ? NetworkImage(widget.jobData['providerPic'])
+                        : null,
+                    child: widget.jobData['providerPic'] != null && widget.jobData['providerPic'].toString().isNotEmpty
+                        ? null
+                        : const Icon(Icons.person, color: Colors.black, size: 35),
                   ),
                   const SizedBox(height: 12),
-                  Text(widget.jobData['providerName'] ?? "Unknown Provider",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                  Text(
+                    (widget.jobData['garageName']?.toString().isNotEmpty == true ? widget.jobData['garageName'] : null) ?? 
+                    (widget.jobData['providerName']?.toString().isNotEmpty == true ? widget.jobData['providerName'] : null) ?? 
+                    "Unknown Provider",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                    textAlign: TextAlign.center,
+                  ),
 
                   const SizedBox(height: 8),
 
@@ -273,7 +283,14 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 children: [
                   _row(Icons.location_on, "Location", widget.jobData['locationText'] ?? "N/A", isDark),
                   Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 32),
-                  _row(Icons.phone, "Provider Phone", widget.jobData['providerPhone'] ?? "N/A", isDark),
+                  _row(
+                    Icons.phone, 
+                    "Provider Phone", 
+                    (widget.jobData['garagePhone']?.toString().isNotEmpty == true ? widget.jobData['garagePhone'] : null) ?? 
+                    (widget.jobData['providerPhone']?.toString().isNotEmpty == true ? widget.jobData['providerPhone'] : null) ?? 
+                    "N/A", 
+                    isDark
+                  ),
                 ],
               ),
             ),

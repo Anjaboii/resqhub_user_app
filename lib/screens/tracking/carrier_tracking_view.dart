@@ -270,7 +270,15 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
                   child: Text(status.toUpperCase().replaceAll('_', ' '), style: const TextStyle(color: AppTheme.accent, fontWeight: FontWeight.w900, fontSize: 12))),
                 const SizedBox(height: 12),
                 if (providerId != null) Row(children: [
-                  const CircleAvatar(backgroundColor: AppTheme.accent, child: Icon(Icons.person, color: Colors.white)),
+                  CircleAvatar(
+                    backgroundColor: AppTheme.accent,
+                    backgroundImage: reqData['providerPic'] != null && reqData['providerPic'].toString().isNotEmpty
+                        ? NetworkImage(reqData['providerPic'])
+                        : null,
+                    child: reqData['providerPic'] != null && reqData['providerPic'].toString().isNotEmpty
+                        ? null
+                        : const Icon(Icons.person, color: Colors.white),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(reqData['providerName'] ?? "Carrier", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
@@ -390,7 +398,16 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
         if (reqData['price'] != null) ...[const SizedBox(height: 8),
           Text("LKR ${(reqData['price'] as num).toStringAsFixed(0)}", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppTheme.accent))],
         Divider(height: 40, color: isDark ? Colors.white10 : Colors.grey.shade200),
-        CircleAvatar(radius: 40, backgroundColor: AppTheme.accent.withValues(alpha: 0.2), child: const Icon(Icons.person, color: AppTheme.accent, size: 40)),
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: AppTheme.accent.withValues(alpha: 0.2),
+          backgroundImage: reqData['providerPic'] != null && reqData['providerPic'].toString().isNotEmpty
+              ? NetworkImage(reqData['providerPic'])
+              : null,
+          child: reqData['providerPic'] != null && reqData['providerPic'].toString().isNotEmpty
+              ? null
+              : const Icon(Icons.person, color: AppTheme.accent, size: 40),
+        ),
         const SizedBox(height: 12),
         Text(reqData['providerName'] ?? "Carrier", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.getTextPrimary(isDark))),
         const SizedBox(height: 30),
