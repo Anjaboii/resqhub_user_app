@@ -111,16 +111,17 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
     final textColor = AppTheme.getTextPrimary(isDark);
     final dimColor = AppTheme.getTextDim(isDark);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Navigate to Garage", style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))],
-      ),
+    return PopScope(canPop: false, child: Scaffold(
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('requests').doc(widget.requestId).snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return Column(children: [
+              AppBar(title: const Text("Navigate to Garage", style: TextStyle(fontWeight: FontWeight.w900)),
+                automaticallyImplyLeading: false),
+              const Expanded(child: Center(child: CircularProgressIndicator())),
+            ]);
+          }
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final String status = (data['status'] ?? '').toString().toLowerCase();
           final String garageName = data['garageName'] ?? '';
@@ -134,10 +135,42 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
             return const Center(child: CircularProgressIndicator());
           }
           if (status == 'completed') {
-            if (data['paymentStatus'] != 'paid') return PaymentScreen(requestId: widget.requestId, reqData: data, onPaymentComplete: () => setState(() {}));
-            return _buildRatingView(data);
+            final String paymentStatus = (data['paymentStatus'] ?? '').toString();
+            final bool isAwaitingProvider = paymentStatus == 'awaiting_provider';
+            final bool isPaymentPending = paymentStatus != 'paid';
+            if (isAwaitingProvider) {
+              // User selected cash/card — waiting for garage to confirm
+              return Column(children: [
+                AppBar(title: const Text("Awaiting Confirmation", style: TextStyle(fontWeight: FontWeight.w900)),
+                  automaticallyImplyLeading: false),
+                Expanded(child: _buildAwaitingProviderView(data, isDark, textColor, dimColor)),
+              ]);
+            }
+            if (isPaymentPending) {
+              // Payment pending — NO home button
+              return Column(children: [
+                AppBar(title: const Text("Payment Required", style: TextStyle(fontWeight: FontWeight.w900)),
+                  automaticallyImplyLeading: false),
+                Expanded(child: PaymentScreen(requestId: widget.requestId, reqData: data, onPaymentComplete: () => setState(() {}))),
+              ]);
+            }
+            // Payment done — show rating, home allowed
+            return Column(children: [
+              AppBar(title: const Text("Rate Service", style: TextStyle(fontWeight: FontWeight.w900)),
+                automaticallyImplyLeading: false,
+                actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
+                  onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))]),
+              Expanded(child: _buildRatingView(data)),
+            ]);
           }
-          if (providerId == null || providerId.isEmpty) return _buildWaitingView(status, isDark, textColor, dimColor);
+          if (providerId == null || providerId.isEmpty) {
+            return Column(children: [
+              AppBar(title: const Text("Navigate to Garage", style: TextStyle(fontWeight: FontWeight.w900)),
+                actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
+                  onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))]),
+              Expanded(child: _buildWaitingView(status, isDark, textColor, dimColor)),
+            ]);
+          }
 
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance.collection('providers').doc(providerId).get(),
@@ -148,6 +181,10 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
               final LatLng garageLoc = LatLng((provData['lat'] as num?)?.toDouble() ?? 0.0, (provData['lng'] as num?)?.toDouble() ?? 0.0);
 
               return Column(children: [
+                AppBar(title: const Text("Navigate to Garage", style: TextStyle(fontWeight: FontWeight.w900)),
+                  automaticallyImplyLeading: false,
+                  actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
+                    onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))]),
                 Expanded(flex: 3, child: GoogleMap(
                   initialCameraPosition: CameraPosition(target: garageLoc, zoom: 15),
                   markers: {Marker(markerId: const MarkerId("garage_pin"), position: garageLoc,
@@ -190,6 +227,47 @@ class _GarageNavigationViewState extends State<GarageNavigationView> {
           );
         },
       ),
+    ));
+  }
+
+  Widget _buildAwaitingProviderView(Map<String, dynamic> reqData, bool isDark, Color textColor, Color dimColor) {
+    final method = (reqData['paymentMethod'] ?? 'cash').toString();
+    final amount = (reqData['totalPaid'] as num?)?.toStringAsFixed(0) ?? (reqData['price'] as num?)?.toStringAsFixed(0) ?? '0';
+    return Container(
+      color: AppTheme.getBg(isDark), padding: const EdgeInsets.all(24),
+      child: Center(child: GlassCard(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(height: 12),
+        Container(padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.orange.withValues(alpha: 0.1)),
+          child: const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 52)),
+        const SizedBox(height: 20),
+        Text("Waiting for Garage", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+        const SizedBox(height: 8),
+        Text(
+          method == 'card'
+            ? "The garage is processing your card payment on their machine."
+            : "Hand over cash to the garage. They will confirm receipt.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: dimColor, fontSize: 14)),
+        const SizedBox(height: 24),
+        Container(padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: AppTheme.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14), border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2))),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("Amount", style: TextStyle(color: dimColor, fontSize: 12)),
+              Text("LKR $amount", style: const TextStyle(color: AppTheme.accent, fontSize: 24, fontWeight: FontWeight.w900)),
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text("Method", style: TextStyle(color: dimColor, fontSize: 12)),
+              Text(method.toUpperCase(), style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.bold)),
+            ]),
+          ])),
+        const SizedBox(height: 24),
+        const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.orange, strokeWidth: 2)),
+        const SizedBox(height: 12),
+        Text("This will update automatically once confirmed", style: TextStyle(color: dimColor, fontSize: 11)),
+      ]))),
     );
   }
 

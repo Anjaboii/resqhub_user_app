@@ -120,6 +120,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             Icon(Icons.location_on, size: 14, color: dimColor), const SizedBox(width: 4),
                             Expanded(child: Text(data['locationText'] ?? "", style: TextStyle(color: dimColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
                           ]),
+                          if (data['createdAt'] != null && data['createdAt'] is Timestamp) ...[
+                            const SizedBox(height: 4),
+                            Row(children: [
+                              Icon(Icons.access_time_rounded, size: 14, color: dimColor), const SizedBox(width: 4),
+                              Text(() {
+                                final dt = (data['createdAt'] as Timestamp).toDate();
+                                return '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                              }(), style: TextStyle(color: dimColor, fontSize: 12)),
+                            ]),
+                          ],
                         ]),
                       ),
                     );

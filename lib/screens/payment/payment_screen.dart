@@ -159,16 +159,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _submitCashPayment() async {
     setState(() => _isProcessing = true);
     try {
+      final isGarage = widget.reqData['providerRole'] == 'garage';
       await FirebaseFirestore.instance
           .collection('requests')
           .doc(widget.requestId)
           .update({
         'paymentMethod': 'cash',
-        'paymentStatus': 'paid',
-        'paidAt': FieldValue.serverTimestamp(),
+        'paymentStatus': 'awaiting_provider',
         'totalPaid': _totalPrice,
       });
-      if (mounted) widget.onPaymentComplete();
+      // Don't call onPaymentComplete — wait for provider to confirm
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     } catch (e) {
       setState(() => _isProcessing = false);
       if (mounted) {
@@ -247,7 +250,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  // ── Card payment (saved cards) ───────────────────────────────────────────────
+  // ── Card payment (garage card machine) ──────────────────────────────────────
   Future<void> _submitCardPayment() async {
     setState(() => _isProcessing = true);
     try {
@@ -256,12 +259,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
           .doc(widget.requestId)
           .update({
         'paymentMethod': 'card',
-        'paymentStatus': 'paid',
-        'paidAt': FieldValue.serverTimestamp(),
+        'paymentStatus': 'awaiting_provider',
         'totalPaid': _totalPrice,
         if (_selectedCardId != null) 'savedCardId': _selectedCardId,
       });
-      if (mounted) widget.onPaymentComplete();
+      // Don't call onPaymentComplete — wait for garage to confirm card machine payment
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     } catch (e) {
       setState(() => _isProcessing = false);
       if (mounted) {
@@ -668,15 +673,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Card
-              _PaymentMethodCard(
-                icon: Icons.credit_card_rounded,
-                title: loc.tr('card'),
-                subtitle: loc.tr('payViaCard'),
-                isSelected: _selectedMethod == 'card',
-                isDark: isDark,
-                onTap: () => setState(() => _selectedMethod = 'card'),
-              ),
+              // Card (garage only — they have card machines)
+              if (isGarage) ...[
+                _PaymentMethodCard(
+                  icon: Icons.credit_card_rounded,
+                  title: loc.tr('card'),
+                  subtitle: "Pay via garage card machine",
+                  isSelected: _selectedMethod == 'card',
+                  isDark: isDark,
+                  onTap: () => setState(() => _selectedMethod = 'card'),
+                ),
+              ],
 
               // ── Saved cards (only when card method selected) ───────────────
               if (_selectedMethod == 'card' && uid != null) ...[
@@ -843,7 +850,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
               if (_selectedMethod == 'cash') ...[
                 const SizedBox(height: 12),
                 Text(
-                  loc.tr('readyAmount'),
+                  "After you hand over cash, the provider will confirm receipt to complete payment.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: dimColor, fontSize: 12),
+                ),
+              ],
+
+              if (_selectedMethod == 'card' && isGarage) ...[
+                const SizedBox(height: 12),
+                Text(
+                  "The garage will process your card on their machine and confirm payment.",
                   textAlign: TextAlign.center,
                   style: TextStyle(color: dimColor, fontSize: 12),
                 ),

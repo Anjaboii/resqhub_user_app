@@ -7,6 +7,7 @@ import '../../widgets/glass_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../request/request_flow.dart';
 import '../tracking/live_tracking_dispatcher.dart';
+import '../history/service_detail_screen.dart';
 import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -106,32 +107,63 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             const SizedBox(height: 20),
 
-            // ── Active request banner ──
+            // ── Active request banners (show ALL active requests) ──
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('requests')
                   .where('userId', isEqualTo: user?.uid)
                   .where('status', whereIn: ['requested', 'accepted', 'en_route', 'arrived', 'towing', 'in_progress']).snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink();
-                final reqDoc = snapshot.data!.docs.first;
-                final reqData = reqDoc.data() as Map<String, dynamic>;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: GlassCard(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrackingDispatcher(requestId: reqDoc.id))),
-                    child: Row(children: [
-                      Container(padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: Colors.orangeAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-                        child: const Icon(Icons.emergency_share, color: Colors.orangeAccent, size: 22)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(loc.tr('requestActive'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
-                        Text("${reqData['status']?.toUpperCase().replaceAll('_', ' ')} — ${loc.tr('tapToTrack')}",
-                            style: TextStyle(fontSize: 12, color: dimColor)),
-                      ])),
-                      Icon(Icons.arrow_forward_ios_rounded, size: 14, color: dimColor),
-                    ]),
-                  ),
+                final docs = snapshot.data!.docs;
+                return Column(
+                  children: docs.map((reqDoc) {
+                    final reqData = reqDoc.data() as Map<String, dynamic>;
+                    final status = (reqData['status'] ?? '').toString();
+                    final serviceType = (reqData['serviceType'] ?? 'Service').toString();
+                    final isCarrier = reqData['providerRole'] == 'carrier';
+
+                    // Status-based color
+                    Color statusColor;
+                    IconData statusIcon;
+                    if (['en_route', 'towing'].contains(status)) {
+                      statusColor = Colors.blue;
+                      statusIcon = Icons.local_shipping_rounded;
+                    } else if (['arrived', 'in_progress'].contains(status)) {
+                      statusColor = Colors.green;
+                      statusIcon = Icons.build_circle_rounded;
+                    } else {
+                      statusColor = Colors.orangeAccent;
+                      statusIcon = Icons.emergency_share;
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: GlassCard(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrackingDispatcher(requestId: reqDoc.id))),
+                        child: Row(children: [
+                          Container(padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+                            child: Icon(statusIcon, color: statusColor, size: 22)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text("${isCarrier ? '🚛' : '🔧'} ${serviceType.toUpperCase()}",
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor, letterSpacing: 0.3)),
+                            const SizedBox(height: 2),
+                            Text("${status.toUpperCase().replaceAll('_', ' ')} — ${loc.tr('tapToTrack')}",
+                                style: TextStyle(fontSize: 12, color: dimColor)),
+                          ])),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: statusColor),
+                          ),
+                        ]),
+                      ),
+                    );
+                  }).toList(),
                 );
               },
             ),
@@ -217,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
             const SizedBox(height: 20),
 
-            // ── Recent Activity ──
+            // ── Recent Activity (tappable) ──
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('requests')
                   .where('userId', isEqualTo: user?.uid)
@@ -231,20 +263,45 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     final data = doc.data() as Map<String, dynamic>;
                     final status = data['status'] ?? '';
                     final statusColor = status == 'completed' ? Colors.green : status == 'cancelled' ? Colors.red : Colors.orange;
+                    // Format date/time
+                    String timeStr = '';
+                    final ts = data['createdAt'];
+                    if (ts != null && ts is Timestamp) {
+                      final dt = ts.toDate();
+                      final now = DateTime.now();
+                      final diff = now.difference(dt);
+                      if (diff.inMinutes < 60) {
+                        timeStr = '${diff.inMinutes}m ago';
+                      } else if (diff.inHours < 24) {
+                        timeStr = '${diff.inHours}h ago';
+                      } else {
+                        timeStr = '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                      }
+                    }
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: GlassCard(child: Row(children: [
-                        Container(padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                          child: Icon(status == 'completed' ? Icons.check_circle : status == 'cancelled' ? Icons.cancel : Icons.pending,
-                            color: statusColor, size: 20)),
-                        const SizedBox(width: 12),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text((data['serviceType'] ?? 'Service').toString().toUpperCase(),
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor, letterSpacing: 0.5)),
-                          Text("${data['vehicle']?['name'] ?? ''} • ${status.toUpperCase()}", style: TextStyle(color: dimColor, fontSize: 11)),
-                        ])),
-                      ])),
+                      child: GlassCard(
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ServiceDetailScreen(jobData: data, requestId: doc.id),
+                          ));
+                        },
+                        child: Row(children: [
+                          Container(padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                            child: Icon(status == 'completed' ? Icons.check_circle : status == 'cancelled' ? Icons.cancel : Icons.pending,
+                              color: statusColor, size: 20)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text((data['serviceType'] ?? 'Service').toString().toUpperCase(),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor, letterSpacing: 0.5)),
+                            Text("${data['vehicle']?['name'] ?? ''} • ${status.toUpperCase()}", style: TextStyle(color: dimColor, fontSize: 11)),
+                            if (timeStr.isNotEmpty)
+                              Text(timeStr, style: TextStyle(color: dimColor.withValues(alpha: 0.7), fontSize: 10)),
+                          ])),
+                          Icon(Icons.chevron_right_rounded, color: dimColor, size: 22),
+                        ]),
+                      ),
                     );
                   }),
                   const SizedBox(height: 20),

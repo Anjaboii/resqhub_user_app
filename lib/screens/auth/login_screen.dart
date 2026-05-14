@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
@@ -27,10 +28,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     setState(() { _loading = true; _error = null; });
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _email.text.trim(),
         password: _password.text,
       );
+
+      // ── Role check: only allow 'user' role ──
+      final uid = cred.user?.uid;
+      if (uid != null) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        if (!userDoc.exists) {
+          // Not in users collection — check if they're a provider
+          await FirebaseAuth.instance.signOut();
+          setState(() => _error = "No account registered with this email.");
+          return;
+        }
+      }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? "Login failed");
     } finally {

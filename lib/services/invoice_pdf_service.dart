@@ -61,14 +61,14 @@ class InvoicePdfService {
     final double perKmRate = (jobData['perKmRate'] as num?)?.toDouble() ?? 0;
     final double distanceKm = (jobData['distanceKm'] as num?)?.toDouble() ?? 0;
     final double distanceCharge = distanceKm * perKmRate;
-    final double platformFee = (jobData['platformFee'] as num?)?.toDouble() ?? 0;
+
 
     // ── Garage bill items ─────────────────────────────────────────────────────
-    final garageBill = jobData['garageBill'] as Map<String, dynamic>? ?? {};
-    final List<dynamic> billItems = garageBill['items'] as List<dynamic>? ?? [];
-    final double laborCharge = (garageBill['laborCharge'] as num?)?.toDouble() ?? 0;
-    final double partsTotal = (garageBill['partsTotal'] as num?)?.toDouble() ?? 0;
-    final String garageNotes = garageBill['notes'] ?? '';
+    // Partner app saves: parts: [{name, price}], serviceCharge, partsTotal
+    final List<dynamic> billItems = jobData['parts'] as List<dynamic>? ?? [];
+    final double serviceCharge = (jobData['serviceCharge'] as num?)?.toDouble() ?? 0;
+    final double partsTotal = (jobData['partsTotal'] as num?)?.toDouble() ?? 0;
+    final String garageNotes = jobData['garageNotes']?.toString() ?? '';
 
     pdf.addPage(
       pw.MultiPage(
@@ -117,7 +117,7 @@ class InvoicePdfService {
 
           if (isGarage && billItems.isNotEmpty) ...[
             // Garage: itemized parts table
-            _buildGarageBillTable(billItems, laborCharge, partsTotal, totalPaid, accentColor, dimText),
+            _buildGarageBillTable(billItems, serviceCharge, partsTotal, totalPaid, accentColor, dimText),
             if (garageNotes.isNotEmpty) ...[
               pw.SizedBox(height: 12),
               pw.Container(
@@ -142,8 +142,8 @@ class InvoicePdfService {
             pw.Divider(color: dimText, thickness: 0.5),
             _buildBillRow('TOTAL', totalPaid, accentColor, isBold: true, fontSize: 14),
           ] else ...[
-            // Carrier: base + distance + platform fee
-            _buildCarrierBillTable(baseCharge, perKmRate, distanceKm, distanceCharge, platformFee, totalPaid, accentColor, dimText),
+            // Carrier: base + distance
+            _buildCarrierBillTable(baseCharge, perKmRate, distanceKm, distanceCharge, totalPaid, accentColor, dimText),
           ],
           pw.SizedBox(height: 32),
 
@@ -297,7 +297,7 @@ class InvoicePdfService {
   // ─── Carrier billing table ──────────────────────────────────────────────────
   static pw.Widget _buildCarrierBillTable(
     double baseCharge, double perKmRate, double distanceKm,
-    double distanceCharge, double platformFee, double total,
+    double distanceCharge, double total,
     PdfColor accent, PdfColor dim,
   ) {
     return pw.Table(
@@ -326,9 +326,6 @@ class InvoicePdfService {
             '${distanceKm.toStringAsFixed(1)} km × ${perKmRate.toStringAsFixed(0)}/km',
             distanceCharge,
           ),
-        // Platform Fee
-        if (platformFee > 0)
-          _tableDataRow('Platform Fee', '', platformFee),
         // Total
         pw.TableRow(
           decoration: pw.BoxDecoration(color: PdfColor.fromHex('#F0FDF4')),
@@ -344,17 +341,15 @@ class InvoicePdfService {
 
   // ─── Garage billing table ───────────────────────────────────────────────────
   static pw.Widget _buildGarageBillTable(
-    List<dynamic> items, double laborCharge, double partsTotal,
+    List<dynamic> items, double serviceCharge, double partsTotal,
     double total, PdfColor accent, PdfColor dim,
   ) {
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColor.fromHex('#E2E8F0'), width: 0.5),
       columnWidths: {
         0: const pw.FlexColumnWidth(1),
-        1: const pw.FlexColumnWidth(4),
-        2: const pw.FlexColumnWidth(1),
-        3: const pw.FlexColumnWidth(2),
-        4: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(5),
+        2: const pw.FlexColumnWidth(2),
       },
       children: [
         // Header
@@ -363,48 +358,47 @@ class InvoicePdfService {
           children: [
             _tableHeaderCell('#'),
             _tableHeaderCell('Item / Part'),
-            _tableHeaderCell('Qty'),
-            _tableHeaderCell('Unit Price'),
-            _tableHeaderCell('Total', align: pw.TextAlign.right),
+            _tableHeaderCell('Price (LKR)', align: pw.TextAlign.right),
           ],
         ),
-        // Items
+        // Items — partner app saves [{name, price}]
         ...items.asMap().entries.map((entry) {
           final idx = entry.key + 1;
           final item = entry.value as Map<String, dynamic>;
-          final name = item['name'] ?? 'Part';
-          final qty = (item['quantity'] as num?)?.toInt() ?? 1;
-          final unitPrice = (item['unitPrice'] as num?)?.toDouble() ?? 0;
-          final itemTotal = (item['total'] as num?)?.toDouble() ?? (unitPrice * qty);
-          return _garageItemRow(idx.toString(), name, qty.toString(), unitPrice, itemTotal);
+          final name = (item['name'] ?? 'Part').toString();
+          final price = (item['price'] as num?)?.toDouble() ?? 0;
+          return pw.TableRow(children: [
+            _tableCell(idx.toString()),
+            _tableCell(name),
+            _tableCell('LKR ${price.toStringAsFixed(2)}', align: pw.TextAlign.right),
+          ]);
         }),
-        // Labor
-        if (laborCharge > 0)
+        // Parts Subtotal
+        if (partsTotal > 0)
           pw.TableRow(
             decoration: pw.BoxDecoration(color: PdfColor.fromHex('#FFF7ED')),
             children: [
               _tableCell(''),
-              _tableCell('Labor & Service Charge', isBold: true),
-              _tableCell(''),
-              _tableCell(''),
-              _tableCell('LKR ${laborCharge.toStringAsFixed(2)}', align: pw.TextAlign.right, isBold: true),
+              _tableCell('Parts Subtotal', isBold: true),
+              _tableCell('LKR ${partsTotal.toStringAsFixed(2)}', align: pw.TextAlign.right, isBold: true),
             ],
           ),
-        // Subtotals
-        if (partsTotal > 0)
-          pw.TableRow(children: [
-            _tableCell(''), _tableCell('Parts Subtotal', isBold: true),
-            _tableCell(''), _tableCell(''),
-            _tableCell('LKR ${partsTotal.toStringAsFixed(2)}', align: pw.TextAlign.right),
-          ]),
+        // Service Charge
+        if (serviceCharge > 0)
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColor.fromHex('#FFF7ED')),
+            children: [
+              _tableCell(''),
+              _tableCell('Service Charge', isBold: true),
+              _tableCell('LKR ${serviceCharge.toStringAsFixed(2)}', align: pw.TextAlign.right, isBold: true),
+            ],
+          ),
         // Grand Total
         pw.TableRow(
           decoration: pw.BoxDecoration(color: PdfColor.fromHex('#F0FDF4')),
           children: [
             _tableTotalCell('', accent),
             _tableTotalCell('TOTAL', accent),
-            _tableTotalCell('', accent),
-            _tableTotalCell('', accent),
             _tableTotalCell('LKR ${total.toStringAsFixed(2)}', accent, align: pw.TextAlign.right),
           ],
         ),

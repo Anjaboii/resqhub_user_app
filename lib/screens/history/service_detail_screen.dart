@@ -118,12 +118,14 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       jobData['baseCharge'] = base;
       jobData['perKmRate'] = perKm;
       jobData['distanceKm'] = distanceKm;
-      jobData['platformFee'] = pFee;
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = AppTheme.getTextPrimary(isDark);
+    final dimColor = AppTheme.getTextDim(isDark);
     final vehicleMap = widget.jobData['vehicle'] as Map<String, dynamic>? ?? {};
 
     // 🎯 Get the dynamic status from Firestore
@@ -134,7 +136,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     final IconData statusIcon = status == 'completed' ? Icons.check_circle_rounded : Icons.cancel_rounded;
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      backgroundColor: AppTheme.getBg(isDark),
       appBar: AppBar(
         title: const Text("Trip Details", style: TextStyle(fontWeight: FontWeight.w900)),
         backgroundColor: Colors.transparent,
@@ -173,8 +175,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                     child: const Icon(Icons.person, color: Colors.black, size: 35),
                   ),
                   const SizedBox(height: 12),
-                  Text(widget.jobData['providerName'] ?? "Rescuer",
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text(widget.jobData['providerName'] ?? "Unknown Provider",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
 
                   const SizedBox(height: 8),
 
@@ -182,9 +184,9 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: statusColor.withOpacity(0.5)),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.5)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -203,6 +205,37 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
             ),
             const SizedBox(height: 16),
 
+            // DATE & TIME Section
+            () {
+              final createdAt = widget.jobData['createdAt'];
+              final completedAt = widget.jobData['completedAt'];
+              String formatTs(dynamic ts) {
+                if (ts == null) return 'N/A';
+                if (ts is Timestamp) {
+                  final dt = ts.toDate();
+                  final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+                  final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+                  return '${dt.day}/${dt.month}/${dt.year} at ${h.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $ampm';
+                }
+                return ts.toString();
+              }
+              return GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("DATE & TIME", style: TextStyle(color: dimColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    _row(Icons.calendar_today_rounded, "Requested", formatTs(createdAt), isDark),
+                    if (completedAt != null) ...[
+                      Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 32),
+                      _row(Icons.check_circle_outline_rounded, "Completed", formatTs(completedAt), isDark),
+                    ],
+                  ],
+                ),
+              );
+            }(),
+            const SizedBox(height: 16),
+
             // ISSUE REPORTED Section
             GlassCard(
               child: Column(
@@ -210,7 +243,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 children: [
                   const Text("ISSUE REPORTED", style: TextStyle(color: AppTheme.accent, fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  _row(Icons.report_problem_rounded, "Service Category", (widget.jobData['serviceType'] ?? "FLAT TIRE").toString().toUpperCase()),
+                  _row(Icons.report_problem_rounded, "Service Category", (widget.jobData['serviceType'] ?? "N/A").toString().toUpperCase(), isDark),
                 ],
               ),
             ),
@@ -222,11 +255,11 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("VEHICLE INFO", style: TextStyle(color: AppTheme.textDim, fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text("VEHICLE INFO", style: TextStyle(color: dimColor, fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-                  _row(Icons.directions_car, "Model", vehicleMap['name'] ?? "Suzuki Swift"),
-                  const Divider(color: Colors.white10, height: 32),
-                  _row(Icons.tag, "Plate Number", vehicleMap['plate'] ?? "555 - 6666"),
+                  _row(Icons.directions_car, "Model", vehicleMap['name'] ?? "N/A", isDark),
+                  Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 32),
+                  _row(Icons.tag, "Plate Number", vehicleMap['plate'] ?? "N/A", isDark),
                 ],
               ),
             ),
@@ -237,9 +270,9 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
             GlassCard(
               child: Column(
                 children: [
-                  _row(Icons.location_on, "Location", widget.jobData['locationText'] ?? "1600 Amphitheatre Pkwy, Mountain View"),
-                  const Divider(color: Colors.white10, height: 32),
-                  _row(Icons.phone, "Provider Phone", widget.jobData['providerPhone'] ?? "0774796913"),
+                  _row(Icons.location_on, "Location", widget.jobData['locationText'] ?? "N/A", isDark),
+                  Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 32),
+                  _row(Icons.phone, "Provider Phone", widget.jobData['providerPhone'] ?? "N/A", isDark),
                 ],
               ),
             ),
@@ -248,22 +281,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 
             // PAYMENT Section (NEW — non-invasive addition)
             if (status == 'completed' && (widget.jobData['totalPaid'] != null || widget.jobData['price'] != null))
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("PAYMENT", style: TextStyle(color: AppTheme.accent, fontSize: 11, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    _row(Icons.payments_rounded, "Amount Paid",
-                        "LKR ${((widget.jobData['totalPaid'] as num?) ?? (widget.jobData['price'] as num?) ?? 0).toStringAsFixed(0)}"),
-                    if (widget.jobData['paymentMethod'] != null) ...[
-                      const Divider(color: Colors.white10, height: 24),
-                      _row(Icons.credit_card_rounded, "Payment Method",
-                          (widget.jobData['paymentMethod'] ?? 'cash').toString().toUpperCase()),
-                    ],
-                  ],
-                ),
-              ),
+              _buildPaymentSection(),
 
             // Download Invoice Button (NEW — non-invasive addition)
             if (status == 'completed') ...[
@@ -307,7 +325,119 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     );
   }
 
-  Widget _row(IconData icon, String label, String value) {
+  Widget _buildPaymentSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final d = widget.jobData;
+    final st = (d['serviceType'] ?? '').toString().toLowerCase();
+    final isGarage = d['providerRole'] == 'garage' ||
+        ['battery', 'lockout', 'engine', 'flat_tire', 'flatTire',
+         'mechanical', 'hybrid', 'electrical', 'other'].contains(st);
+    final double totalPaid = (d['totalPaid'] as num?)?.toDouble() ??
+        (d['price'] as num?)?.toDouble() ?? 0;
+    final List<dynamic> parts = d['parts'] as List<dynamic>? ?? [];
+    final double serviceCharge = (d['serviceCharge'] as num?)?.toDouble() ?? 0;
+    final double partsTotal = (d['partsTotal'] as num?)?.toDouble() ?? 0;
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("BILLING DETAILS",
+              style: TextStyle(color: AppTheme.accent, fontSize: 11,
+                  fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 16),
+
+          if (isGarage && parts.isNotEmpty) ...[
+            // ── Itemized parts list ──
+            ...parts.asMap().entries.map((entry) {
+              final item = entry.value as Map<String, dynamic>;
+              final name = (item['name'] ?? 'Part').toString();
+              final price = (item['price'] as num?)?.toDouble() ?? 0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 22, height: 22,
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Center(
+                        child: Text("${entry.key + 1}",
+                            style: TextStyle(
+                                color: AppTheme.accent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(name,
+                          style: TextStyle(
+                              color: AppTheme.getTextPrimary(isDark), fontSize: 13)),
+                    ),
+                    Text("LKR ${price.toStringAsFixed(0)}",
+                        style: TextStyle(
+                            color: AppTheme.getTextDim(isDark),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              );
+            }),
+            Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 20),
+            // Parts subtotal
+            _billLine("Parts Total", "LKR ${partsTotal.toStringAsFixed(0)}", isDark),
+            if (serviceCharge > 0)
+              _billLine("Service Charge", "LKR ${serviceCharge.toStringAsFixed(0)}", isDark),
+            Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 20),
+            // Grand total
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("TOTAL",
+                    style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900)),
+                Text("LKR ${totalPaid.toStringAsFixed(0)}",
+                    style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ] else ...[
+            // ── Simple total for carriers or garages without parts ──
+            _row(Icons.payments_rounded, "Amount Paid",
+                "LKR ${totalPaid.toStringAsFixed(0)}", isDark),
+          ],
+
+          if (d['paymentMethod'] != null) ...[
+            Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 24),
+            _row(Icons.credit_card_rounded, "Payment Method",
+                (d['paymentMethod'] ?? 'cash').toString().toUpperCase(), isDark),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _billLine(String label, String value, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: AppTheme.getTextDim(isDark), fontSize: 12)),
+          Text(value, style: TextStyle(color: AppTheme.getTextPrimary(isDark).withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(IconData icon, String label, String value, bool isDark) {
     return Row(
       children: [
         Icon(icon, color: AppTheme.accent, size: 20),
@@ -316,8 +446,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: AppTheme.textDim, fontSize: 11)),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+              Text(label, style: TextStyle(color: AppTheme.getTextDim(isDark), fontSize: 11)),
+              Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.getTextPrimary(isDark))),
             ],
           ),
         ),

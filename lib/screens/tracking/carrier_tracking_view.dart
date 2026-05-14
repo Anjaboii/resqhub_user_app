@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
@@ -34,7 +35,7 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
 
   final _towingOrder = const ['requested', 'accepted', 'en_route', 'arrived', 'towing', 'completed'];
   final _fuelOrder = const ['requested', 'accepted', 'en_route', 'arrived', 'completed'];
-  final _accidentOrder = const ['requested', 'accepted', 'en_route', 'arrived', 'completed'];
+  final _accidentOrder = const ['requested', 'accepted', 'en_route', 'arrived', 'in_progress', 'completed'];
 
   @override
   void initState() {
@@ -45,17 +46,13 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
   Future<void> _loadCustomMarkers() async {
     _truckIcon = await _buildMarkerIcon(
       emoji: '🚛', bgColor: const Color(0xFF1E3A5F), borderColor: const Color(0xFF3B82F6), size: 120);
-    _destIcon = await _buildMarkerIcon(
-      emoji: '📍', bgColor: const Color(0xFF065F46), borderColor: const Color(0xFF10B981), size: 100);
+    // Destination uses a distinctive green marker pin
+    _destIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
     if (mounted) setState(() {});
   }
 
   Future<BitmapDescriptor> _buildMarkerIcon({required String emoji, required Color bgColor, required Color borderColor, double size = 120}) async {
-    // Instead of drawing on canvas, we fetch a cool 3D truck image from a public URL to serve as the map marker.
-    // The arguments are ignored for the truck because we use a realistic 3D icon now.
-    final iconUrl = emoji == "⛽" 
-      ? 'https://img.icons8.com/3d-fluency/94/gas-station.png' // 3D Gas pump
-      : 'https://img.icons8.com/3d-fluency/94/truck.png'; // 3D Truck
+    final iconUrl = 'https://img.icons8.com/3d-fluency/94/truck.png'; // 3D Truck for driver
     
     try {
       final request = await HttpClient().getUrl(Uri.parse(iconUrl));
@@ -159,14 +156,16 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
     final dimColor = AppTheme.getTextDim(isDark);
 
     return PopScope(canPop: false, child: Scaffold(
-      appBar: AppBar(title: const Text("Tracking", style: TextStyle(fontWeight: FontWeight.w900)),
-        automaticallyImplyLeading: false,
-        actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))]),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('requests').doc(widget.requestId).snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return Scaffold(
+              appBar: AppBar(title: const Text("Tracking", style: TextStyle(fontWeight: FontWeight.w900)),
+                automaticallyImplyLeading: false),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
           final reqData = snapshot.data!.data() as Map<String, dynamic>;
           final status = (reqData['status'] ?? 'requested').toString().toLowerCase();
           final providerId = reqData['providerId'] as String?;
@@ -176,12 +175,38 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
           final userLoc = LatLng((reqData['lat'] as num).toDouble(), (reqData['lng'] as num).toDouble());
           final order = isTowing ? _towingOrder : isAccident ? _accidentOrder : _fuelOrder;
 
+          // Check if payment is pending (completed but not paid)
+          final String paymentStatus = (reqData['paymentStatus'] ?? '').toString();
+          final bool isPaymentPending = status == 'completed' && paymentStatus != 'paid';
+          final bool isAwaitingProvider = status == 'completed' && paymentStatus == 'awaiting_provider';
+
           _handleStatusChange(status, reqData);
 
           if (status == 'completed') {
-            return reqData['paymentStatus'] != 'paid'
-              ? PaymentScreen(requestId: widget.requestId, reqData: reqData, onPaymentComplete: () => setState(() {}))
-              : _buildRatingView(reqData);
+            if (isAwaitingProvider) {
+              // User selected cash/card — waiting for provider to confirm receipt
+              return Column(children: [
+                AppBar(title: const Text("Awaiting Confirmation", style: TextStyle(fontWeight: FontWeight.w900)),
+                  automaticallyImplyLeading: false),
+                Expanded(child: _buildAwaitingProviderView(reqData, isDark, textColor, dimColor)),
+              ]);
+            }
+            if (isPaymentPending) {
+              // Payment pending — show payment screen WITHOUT home button
+              return Column(children: [
+                AppBar(title: const Text("Payment Required", style: TextStyle(fontWeight: FontWeight.w900)),
+                  automaticallyImplyLeading: false),
+                Expanded(child: PaymentScreen(requestId: widget.requestId, reqData: reqData, onPaymentComplete: () => setState(() {}))),
+              ]);
+            }
+            // Payment done — show rating view (home allowed)
+            return Column(children: [
+              AppBar(title: const Text("Rate Service", style: TextStyle(fontWeight: FontWeight.w900)),
+                automaticallyImplyLeading: false,
+                actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
+                  onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))]),
+              Expanded(child: _buildRatingView(reqData)),
+            ]);
           }
           if (status == 'cancelled') {
             WidgetsBinding.instance.addPostFrameCallback((_) => Navigator.of(context).popUntil((route) => route.isFirst));
@@ -195,6 +220,11 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
           if (reqData['destinationLat'] != null) _destinationSubmitted = true;
 
           return Column(children: [
+            // AppBar for active tracking — home allowed
+            AppBar(title: const Text("Tracking", style: TextStyle(fontWeight: FontWeight.w900)),
+              automaticallyImplyLeading: false,
+              actions: [IconButton(icon: const Icon(Icons.home_rounded, color: AppTheme.accent),
+                onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst))]),
             // Map
             Expanded(flex: 3, child: Stack(children: [
               StreamBuilder<DocumentSnapshot>(
@@ -284,26 +314,69 @@ class _CarrierTrackingViewState extends State<CarrierTrackingView> {
 
   String _getStepTitle(String step, bool isTowing, bool isAccident, AppLocalizations loc) {
     switch (step) {
-      case 'requested': return loc.tr('findingHelp');
-      case 'accepted': return loc.tr('carrierAssigned');
-      case 'en_route': return loc.tr('enRoute');
-      case 'arrived': return loc.tr('arrived');
-      case 'towing': return loc.tr('towingTrip');
-      case 'completed': return loc.tr('completed');
+      case 'requested':   return loc.tr('findingHelp');
+      case 'accepted':    return loc.tr('carrierAssigned');
+      case 'en_route':    return loc.tr('enRoute');
+      case 'arrived':     return loc.tr('arrived');
+      case 'towing':      return loc.tr('towingTrip');
+      case 'in_progress': return isAccident ? "Recovery Underway" : "In Progress";
+      case 'completed':   return loc.tr('completed');
       default: return "";
     }
   }
 
   String _getStepSub(String step, bool isTowing, bool isAccident, String? dest, AppLocalizations loc) {
     switch (step) {
-      case 'requested': return "Connecting to network";
-      case 'accepted': return "Request accepted";
-      case 'en_route': return "On the way to you";
-      case 'arrived': return "At your location";
-      case 'towing': return "Towing to ${dest ?? 'destination'}";
-      case 'completed': return "Service complete";
+      case 'requested':   return "Connecting to network";
+      case 'accepted':    return "Request accepted";
+      case 'en_route':    return "On the way to you";
+      case 'arrived':     return "At your location";
+      case 'towing':      return "Towing to ${dest ?? 'destination'}";
+      case 'in_progress': return isAccident ? "Accident recovery in progress" : "Work in progress";
+      case 'completed':   return "Service complete";
       default: return "";
     }
+  }
+
+  Widget _buildAwaitingProviderView(Map<String, dynamic> reqData, bool isDark, Color textColor, Color dimColor) {
+    final method = (reqData['paymentMethod'] ?? 'cash').toString();
+    final amount = (reqData['totalPaid'] as num?)?.toStringAsFixed(0) ?? (reqData['price'] as num?)?.toStringAsFixed(0) ?? '0';
+    return Container(
+      color: AppTheme.getBg(isDark), padding: const EdgeInsets.all(24),
+      child: Center(child: GlassCard(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(height: 12),
+        Container(padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.orange.withValues(alpha: 0.1)),
+          child: const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 52)),
+        const SizedBox(height: 20),
+        Text("Waiting for Provider", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+        const SizedBox(height: 8),
+        Text(
+          method == 'card'
+            ? "The garage is processing your card payment on their machine."
+            : "Hand over cash to the provider. They will confirm receipt.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: dimColor, fontSize: 14)),
+        const SizedBox(height: 24),
+        Container(padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: AppTheme.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14), border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2))),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("Amount", style: TextStyle(color: dimColor, fontSize: 12)),
+              Text("LKR $amount", style: const TextStyle(color: AppTheme.accent, fontSize: 24, fontWeight: FontWeight.w900)),
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text("Method", style: TextStyle(color: dimColor, fontSize: 12)),
+              Text(method.toUpperCase(), style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.bold)),
+            ]),
+          ])),
+        const SizedBox(height: 24),
+        const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.orange, strokeWidth: 2)),
+        const SizedBox(height: 12),
+        Text("This will update automatically once confirmed", style: TextStyle(color: dimColor, fontSize: 11)),
+      ]))),
+    );
   }
 
   Widget _buildRatingView(Map<String, dynamic> reqData) {
@@ -353,10 +426,30 @@ class _DestinationPickerScreen extends StatefulWidget {
 
 class _DestinationPickerScreenState extends State<_DestinationPickerScreen> {
   final _searchCtrl = TextEditingController();
-  LatLng _selectedPos = const LatLng(7.2906, 80.6337); // Default: Kandy
+  LatLng? _selectedPos;
   String _selectedName = "";
   bool _isLoading = false;
+  bool _isLocating = true;
   GoogleMapController? _mapCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position pos = await Geolocator.getCurrentPosition();
+      setState(() {
+        _selectedPos = LatLng(pos.latitude, pos.longitude);
+        _isLocating = false;
+      });
+      _mapCtrl?.animateCamera(CameraUpdate.newLatLngZoom(_selectedPos!, 15));
+    } catch (_) {
+      setState(() => _isLocating = false);
+    }
+  }
 
   Future<void> _searchLocation() async {
     final query = _searchCtrl.text.trim();
@@ -391,19 +484,21 @@ class _DestinationPickerScreenState extends State<_DestinationPickerScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = AppTheme.getTextPrimary(isDark);
+    final defaultPos = _selectedPos ?? const LatLng(0, 0);
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.loc.tr('pickDestination'), style: const TextStyle(fontWeight: FontWeight.w900))),
       body: Stack(children: [
-        GoogleMap(
-          initialCameraPosition: CameraPosition(target: _selectedPos, zoom: 12),
-          onMapCreated: (c) => _mapCtrl = c,
-          onTap: (pos) { setState(() => _selectedPos = pos); _reverseGeocode(pos); },
-          markers: {Marker(markerId: const MarkerId("dest"), position: _selectedPos, draggable: true,
-            onDragEnd: (pos) { setState(() => _selectedPos = pos); _reverseGeocode(pos); })},
-        ),
-        // Crosshair
-        const Center(child: IgnorePointer(child: Icon(Icons.add, color: Colors.red, size: 30))),
+        if (_isLocating)
+          const Center(child: CircularProgressIndicator(color: AppTheme.accent))
+        else
+          GoogleMap(
+            initialCameraPosition: CameraPosition(target: defaultPos, zoom: 15),
+            onMapCreated: (c) => _mapCtrl = c,
+            onTap: (pos) { setState(() => _selectedPos = pos); _reverseGeocode(pos); },
+            markers: _selectedPos != null ? {Marker(markerId: const MarkerId("dest"), position: _selectedPos!, draggable: true,
+              onDragEnd: (pos) { setState(() => _selectedPos = pos); _reverseGeocode(pos); })} : {},
+          ),
         // Search bar
         Positioned(top: 10, left: 16, right: 16, child: Container(
           decoration: BoxDecoration(color: AppTheme.getCard(isDark), borderRadius: BorderRadius.circular(14),
@@ -437,8 +532,8 @@ class _DestinationPickerScreenState extends State<_DestinationPickerScreen> {
             SizedBox(width: double.infinity, child: ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent, padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-              onPressed: _selectedName.isEmpty ? null : () async {
-                await widget.onConfirm(_selectedPos, _selectedName);
+              onPressed: (_selectedName.isEmpty || _selectedPos == null) ? null : () async {
+                await widget.onConfirm(_selectedPos!, _selectedName);
                 if (mounted) Navigator.pop(context);
               },
               child: Text(widget.loc.tr('confirmDestination'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
