@@ -341,28 +341,50 @@ class _ModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GlassCard(
+    return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         decoration: BoxDecoration(
-          border: isSelected ? Border.all(color: AppTheme.accent, width: 2) : null,
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected
+              ? AppTheme.accent.withValues(alpha: 0.08)
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? AppTheme.accent : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            width: isSelected ? 2 : 1,
+          ),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 36, color: isSelected ? AppTheme.accent : AppTheme.getTextDim(isDark)),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppTheme.accent.withValues(alpha: 0.15)
+                    : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.08)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 28, color: isSelected ? AppTheme.accent : AppTheme.getTextDim(isDark)),
+            ),
             const SizedBox(width: 15),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.getTextPrimary(isDark))),
+                  const SizedBox(height: 2),
                   Text(sub, style: TextStyle(color: AppTheme.getTextDim(isDark), fontSize: 12)),
                 ],
               ),
             ),
-            if (isSelected) const Icon(Icons.check_circle, color: AppTheme.accent),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: isSelected
+                  ? const Icon(Icons.check_circle_rounded, color: AppTheme.accent, size: 26, key: ValueKey(true))
+                  : Icon(Icons.radio_button_unchecked_rounded, color: AppTheme.getTextDim(isDark), size: 26, key: const ValueKey(false)),
+            ),
           ],
         ),
       ),
@@ -935,10 +957,24 @@ class _RowKV extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(children: [
-        Expanded(child: Text(k, style: TextStyle(color: AppTheme.getTextDim(isDark)))),
-        Text(v, style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.getTextPrimary(isDark))),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(k, style: TextStyle(color: AppTheme.getTextDim(isDark))),
+          ),
+          Expanded(
+            child: Text(
+              v,
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.getTextPrimary(isDark)),
+              textAlign: TextAlign.right,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

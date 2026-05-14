@@ -59,7 +59,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     try {
       final st = (jobData['serviceType'] ?? '').toString().toLowerCase();
       final isGarage = jobData['providerRole'] == 'garage' ||
-          ['battery', 'lockout', 'engine', 'flat_tire', 'flatTire'].contains(st);
+          ['battery', 'lockout', 'engine', 'flat_tire', 'flattire', 'flat tire',
+           'mechanical', 'hybrid', 'electrical', 'other'].contains(st);
 
       // Platform fee
       final platformDoc = await FirebaseFirestore.instance
